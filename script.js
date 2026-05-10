@@ -25,6 +25,31 @@ let updownBottomFips = null;
 let elevationOn = true;
 let elevationBtn = null;  // assigned at element-init time
 
+// PASS-16: Compare-feature state.
+//   - on:        true while the Compare toggle is engaged
+//   - refFips:   country chosen as the reference (Mode II only — UP/DOWN
+//                uses the per-pane focals as implicit references)
+// updownPaneEdges{Up,Down} cache directed delta_tone + counts from the
+// focal toward each non-focal country in that pane, populated by
+// computeUpDownOffsets so the comparison tooltip and lines can read them
+// without re-aggregating ROWS on every hover.
+//
+// PASS-16b: compareLineLabel is hoisted up here too. tick() and the
+// hover handler both reach for it, and they run synchronously during
+// startup before the Compare module's own const declaration would land.
+// `import * as THREE` happens at line 1, so THREE is available here.
+const compareState = { on: false, refFips: null };
+let updownPaneEdgesUp = [];   // [{fips, sym, count}, ...]
+let updownPaneEdgesDown = [];
+const compareLineLabel = {
+  active: false,
+  midpoint: new THREE.Vector3(),
+};
+// Module scripts run with the DOM already parsed, so it's safe to grab the
+// element reference up here. Hoisting it (instead of leaving it inside the
+// Compare module) keeps the hover handler's hideLineLabel() call TDZ-safe.
+const lineLabelEl = document.getElementById('line-label');
+
 // Data is split across files inside ./data/ (was a single inline blob in
 // the all-in-one HTML build). Flows are split by domain (the primary toggle
 // in the UI) and countries are split by FIPS code (one file per country),
@@ -67,8 +92,17 @@ console.log(`Loaded ${ROWS.length} rows, ${Object.keys(COUNTRIES).length} countr
 // Y = elevation
 // ---------------------------------------------------------------------------
 const COORD_SCALE = 1.5;
-const MAP_W = 540;
-const MAP_D = 270;
+// PASS-15: MAP_W and MAP_D are dynamic. Geo and Reorganized modes use
+// the BASE values (540 × 270 — standard 2:1 world canvas). UP/DOWN swaps
+// to wider+taller dimensions so two stacked panes can each fit a full
+// world's worth of countries without clipping at the edges. Mode change
+// rebuilds the basemap mesh + frame.
+const MAP_W_BASE = 540;
+const MAP_W_UPDOWN = 800;
+const MAP_D_BASE = 270;
+const MAP_D_UPDOWN = 400;
+let MAP_W = MAP_W_BASE;
+let MAP_D = MAP_D_BASE;
 function projLon(lon) { return lon * COORD_SCALE; }
 function projLat(lat) { return -lat * COORD_SCALE; }
 
@@ -296,12 +330,21 @@ function makeBasemapTexture() {
       if (off && !off.hidden) drawCountry(COUNTRIES[updownBottomFips], off.ox, off.oz);
     }
 
-    // Divider line between panes (canvas y = H/2)
-    ctx.strokeStyle = '#3d4658';
-    ctx.lineWidth = 2;
+    // Divider band between panes — a clear visual gap, not just a hairline.
+    // Filled with the deepest background tone so the two panes read as
+    // separate viewports, with subtle accent rules at top and bottom.
+    // PASS-15: countries are already kept clear of this band by the
+    // halfH-aware Z clamp in computeUpDownOffsets, so nothing should
+    // ever sit underneath it.
+    const DIVIDER_PX = 30;
+    const yMid = H / 2;
+    ctx.fillStyle = '#0a0d12';     // matches --bg-deepest
+    ctx.fillRect(0, yMid - DIVIDER_PX / 2, W, DIVIDER_PX);
+    ctx.strokeStyle = '#4a5365';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(0, H / 2);
-    ctx.lineTo(W, H / 2);
+    ctx.moveTo(0, yMid - DIVIDER_PX / 2); ctx.lineTo(W, yMid - DIVIDER_PX / 2);
+    ctx.moveTo(0, yMid + DIVIDER_PX / 2); ctx.lineTo(W, yMid + DIVIDER_PX / 2);
     ctx.stroke();
 
     // Pane labels
@@ -349,14 +392,36 @@ basemap.rotation.x = -Math.PI / 2;
 basemap.position.y = -0.05;
 scene.add(basemap);
 
-// Frame
-scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-  new THREE.Vector3(-MAP_W/2, 0, -MAP_D/2),
-  new THREE.Vector3( MAP_W/2, 0, -MAP_D/2),
-  new THREE.Vector3( MAP_W/2, 0,  MAP_D/2),
-  new THREE.Vector3(-MAP_W/2, 0,  MAP_D/2),
-  new THREE.Vector3(-MAP_W/2, 0, -MAP_D/2),
-]), new THREE.LineBasicMaterial({ color: 0x4a5365 })));
+// Frame — kept in a tracked variable so setMapDimensions() can rebuild it
+// when the world's vertical extent changes for UP/DOWN mode.
+function makeFrameGeometry() {
+  return new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-MAP_W/2, 0, -MAP_D/2),
+    new THREE.Vector3( MAP_W/2, 0, -MAP_D/2),
+    new THREE.Vector3( MAP_W/2, 0,  MAP_D/2),
+    new THREE.Vector3(-MAP_W/2, 0,  MAP_D/2),
+    new THREE.Vector3(-MAP_W/2, 0, -MAP_D/2),
+  ]);
+}
+const frameLine = new THREE.Line(
+  makeFrameGeometry(),
+  new THREE.LineBasicMaterial({ color: 0x4a5365 })
+);
+scene.add(frameLine);
+
+// Swap the world's extent (width and/or depth) and rebuild the affected
+// geometries. Called when entering or leaving UP/DOWN mode. Cheap (a
+// couple of small geometry rebuilds); the basemap TEXTURE is redrawn
+// separately by rebuildBasemapTexture() during the mode-transition step.
+function setMapDimensions(newW, newD) {
+  if (MAP_W === newW && MAP_D === newD) return;
+  MAP_W = newW;
+  MAP_D = newD;
+  basemap.geometry.dispose();
+  basemap.geometry = new THREE.PlaneGeometry(MAP_W, MAP_D);
+  frameLine.geometry.dispose();
+  frameLine.geometry = makeFrameGeometry();
+}
 
 // ---------------------------------------------------------------------------
 // SDF (signed-distance-to-polygon) data per country shape.
@@ -894,6 +959,7 @@ function updateTooltip(fips, screenX, screenY) {
     tooltipEl.classList.remove('visible');
     return;
   }
+  ensureTooltipMode('normal');
   const data = lastDomainAgg ? lastDomainAgg.get(fips) : null;
   document.getElementById('tt-name').textContent = `${c.name} · ${fips}`;
   document.getElementById('tt-out').textContent = data ? data.count.toLocaleString() : '—';
@@ -914,8 +980,83 @@ function updateTooltip(fips, screenX, screenY) {
   tooltipEl.classList.add('visible');
 }
 
+// PASS-16: comparison tooltip — shows pairwise affinity to the reference
+// country (Mode II) or to the pane's focal (UP/DOWN). Different rows than
+// the normal tooltip, so we swap the body markup once when the mode
+// changes via ensureTooltipMode().
+let tooltipBodyMode = null;
+function ensureTooltipMode(mode) {
+  if (tooltipBodyMode === mode) return;
+  tooltipBodyMode = mode;
+  if (mode === 'compare') {
+    tooltipEl.innerHTML = `
+      <div class="name" id="tt-name">—</div>
+      <div class="row"><span class="lbl">vs.</span><span class="v" id="tt-vs">—</span></div>
+      <div class="row"><span class="lbl">Affinity</span><span class="v" id="tt-aff">—</span></div>
+      <div class="row"><span class="lbl">Tier</span><span class="v" id="tt-tier">—</span></div>
+      <div class="row"><span class="lbl">Articles</span><span class="v" id="tt-arts">—</span></div>
+    `;
+  } else {
+    tooltipEl.innerHTML = `
+      <div class="name" id="tt-name">—</div>
+      <div class="row"><span class="lbl">Articles published</span><span class="v" id="tt-out">—</span></div>
+      <div class="row"><span class="lbl">Mean tone (out)</span><span class="v" id="tt-tone">—</span></div>
+      <div class="row"><span class="lbl">Top targets</span><span class="v" id="tt-targets">—</span></div>
+      <div class="row"><span class="lbl">Bloc</span><span class="v" id="tt-bloc">—</span></div>
+    `;
+  }
+}
+
+function updateTooltipCompare(fips, refFips, paneId, screenX, screenY) {
+  const c   = COUNTRIES[fips];
+  const ref = COUNTRIES[refFips];
+  if (!c || !ref) {
+    tooltipEl.classList.remove('visible');
+    return;
+  }
+  ensureTooltipMode('compare');
+
+  // Resolve the affinity from cached edge data (no re-aggregation per hover)
+  let sym = null, articlesText = '— (no mutual data)';
+  const isDirected = currentMode === 'updown';
+  if (currentMode === 'reorganized') {
+    const edge = findReorgEdge(refFips, fips);
+    if (edge) {
+      sym = edge.sym;
+      articlesText = `${edge.cA.toLocaleString()} ↔ ${edge.cB.toLocaleString()}`;
+    }
+  } else if (currentMode === 'updown') {
+    const list = paneId === 'up' ? updownPaneEdgesUp : updownPaneEdgesDown;
+    const e = list.find(x => x.fips === fips);
+    if (e) {
+      sym = e.sym;
+      articlesText = e.count.toLocaleString();
+    }
+  }
+
+  let symText = '—', symClass = '', tier = '—';
+  if (sym !== null) {
+    symText = (sym >= 0 ? '+' : '') + sym.toFixed(2);
+    if (sym < -0.5) symClass = 'v neg';
+    else if (sym > 0.5) symClass = 'v pos';
+    else symClass = 'v';
+    tier = compareTierLabel(sym);
+  }
+
+  document.getElementById('tt-name').textContent = `${c.name} · ${fips}`;
+  document.getElementById('tt-vs').textContent = ref.name;
+  const affEl = document.getElementById('tt-aff');
+  affEl.textContent = symText + (isDirected ? ' (directed)' : ' (mutual)');
+  affEl.className = symClass;
+  document.getElementById('tt-tier').textContent = tier;
+  document.getElementById('tt-arts').textContent = articlesText;
+  tooltipEl.style.left = screenX + 'px';
+  tooltipEl.style.top = screenY + 'px';
+  tooltipEl.classList.add('visible');
+}
+
 function onMouseMove(ev) {
-  if (orbit.dragging) return;
+  if (orbit.dragging || orbit.panning) return;
   ndc.x = (ev.clientX / window.innerWidth) * 2 - 1;
   ndc.y = -(ev.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(ndc, camera);
@@ -926,16 +1067,49 @@ function onMouseMove(ev) {
     const p = hits[0].point;
     const fips = countryAtWorldXZ(p.x, p.z);
     if (fips) {
+      // PASS-16: in Compare mode, route to the comparison tooltip when
+      // we have a reference. UP/DOWN: each pane's focal is its reference;
+      // we determine pane from the sign of world-Z (divider is at z=0).
+      if (compareState.on && currentMode === 'reorganized' && compareState.refFips
+          && compareState.refFips !== fips) {
+        updateTooltipCompare(fips, compareState.refFips, null, ev.clientX, ev.clientY);
+        // PASS-16b: also anchor the affinity number to the line midpoint
+        const refPos = countryWorldPos(compareState.refFips);
+        const tgtPos = countryWorldPos(fips);
+        const edge = findReorgEdge(compareState.refFips, fips);
+        if (refPos && tgtPos && edge) showLineLabel(refPos, tgtPos, edge.sym);
+        else hideLineLabel();
+        return;
+      }
+      if (compareState.on && currentMode === 'updown') {
+        const paneId = p.z < 0 ? 'up' : 'down';
+        const focal  = paneId === 'up' ? updownTopFips : updownBottomFips;
+        if (focal && focal !== fips) {
+          updateTooltipCompare(fips, focal, paneId, ev.clientX, ev.clientY);
+          const list   = paneId === 'up' ? updownPaneEdgesUp : updownPaneEdgesDown;
+          const e      = list.find(x => x.fips === fips);
+          const refPos = countryWorldPos(focal, paneId);
+          const tgtPos = countryWorldPos(fips, paneId);
+          if (refPos && tgtPos && e) showLineLabel(refPos, tgtPos, e.sym);
+          else hideLineLabel();
+          return;
+        }
+      }
+      hideLineLabel();
       updateTooltip(fips, ev.clientX, ev.clientY);
       return;
     }
   }
+  hideLineLabel();
   tooltipEl.classList.remove('visible');
 }
 window.addEventListener('mousemove', onMouseMove);
 
 // ---------------------------------------------------------------------------
 // Orbit camera
+// Drag (left click)            → orbit / rotate
+// Ctrl/Cmd+drag, right-click   → pan (translate target along the map plane)
+// Wheel                        → zoom
 // ---------------------------------------------------------------------------
 const orbit = {
   azimuth: 0,
@@ -943,6 +1117,7 @@ const orbit = {
   distance: 480,
   target: new THREE.Vector3(0, 0, 0),
   dragging: false,
+  panning: false,
   lastX: 0, lastY: 0,
 };
 function applyOrbit() {
@@ -955,23 +1130,64 @@ function applyOrbit() {
 applyOrbit();
 
 renderer.domElement.addEventListener('mousedown', e => {
-  orbit.dragging = true; orbit.lastX = e.clientX; orbit.lastY = e.clientY;
-  renderer.domElement.style.cursor = 'grabbing';
+  // Ctrl/Cmd+drag, Shift+drag, or right-click drag → pan
+  // Plain left-drag → orbit
+  const wantsPan = e.ctrlKey || e.metaKey || e.shiftKey || e.button === 2;
+  if (wantsPan) {
+    orbit.panning = true;
+    renderer.domElement.style.cursor = 'move';
+  } else {
+    orbit.dragging = true;
+    renderer.domElement.style.cursor = 'grabbing';
+  }
+  orbit.lastX = e.clientX;
+  orbit.lastY = e.clientY;
   tooltipEl.classList.remove('visible');
+  hideLineLabel();
 });
 window.addEventListener('mouseup', () => {
   orbit.dragging = false;
+  orbit.panning = false;
   renderer.domElement.style.cursor = 'default';
 });
 window.addEventListener('mousemove', e => {
-  if (!orbit.dragging) return;
-  const dx = e.clientX - orbit.lastX;
-  const dy = e.clientY - orbit.lastY;
-  orbit.azimuth   -= dx * 0.005;
-  orbit.altitude  = Math.max(0.18, Math.min(1.45, orbit.altitude + dy * 0.005));
-  orbit.lastX = e.clientX; orbit.lastY = e.clientY;
-  applyOrbit();
+  if (orbit.dragging) {
+    const dx = e.clientX - orbit.lastX;
+    const dy = e.clientY - orbit.lastY;
+    orbit.azimuth   -= dx * 0.005;
+    orbit.altitude  = Math.max(0.18, Math.min(1.45, orbit.altitude + dy * 0.005));
+    orbit.lastX = e.clientX; orbit.lastY = e.clientY;
+    applyOrbit();
+  } else if (orbit.panning) {
+    // Pan the target along the camera-aligned XZ floor plane. Speed
+    // scales with zoom distance so the pan feels consistent at any zoom.
+    // "Drag the world" feel: as the cursor moves, the world appears to
+    // follow it (target moves opposite to cursor delta in world space).
+    const dx = e.clientX - orbit.lastX;
+    const dy = e.clientY - orbit.lastY;
+    const az = orbit.azimuth;
+    const panSpeed = orbit.distance * 0.0018;
+    // Camera right-vector in the XZ floor plane
+    const rightX =  Math.cos(az);
+    const rightZ = -Math.sin(az);
+    // Camera forward projected onto the XZ floor plane
+    const fwdX = -Math.sin(az);
+    const fwdZ = -Math.cos(az);
+    orbit.target.x += -dx * panSpeed * rightX + dy * panSpeed * fwdX;
+    orbit.target.z += -dx * panSpeed * rightZ + dy * panSpeed * fwdZ;
+    // Soft bounds so the user can't pan into the void and lose the map
+    const PAN_BOUND_X = MAP_W * 1.2;
+    const PAN_BOUND_Z = MAP_D * 1.2;
+    if (orbit.target.x >  PAN_BOUND_X) orbit.target.x =  PAN_BOUND_X;
+    if (orbit.target.x < -PAN_BOUND_X) orbit.target.x = -PAN_BOUND_X;
+    if (orbit.target.z >  PAN_BOUND_Z) orbit.target.z =  PAN_BOUND_Z;
+    if (orbit.target.z < -PAN_BOUND_Z) orbit.target.z = -PAN_BOUND_Z;
+    orbit.lastX = e.clientX; orbit.lastY = e.clientY;
+    applyOrbit();
+  }
 });
+// Right-click pan: suppress the browser's context menu on the canvas
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 renderer.domElement.addEventListener('wheel', e => {
   e.preventDefault();
   orbit.distance = Math.max(150, Math.min(1100, orbit.distance + e.deltaY * 0.6));
@@ -999,6 +1215,9 @@ function tick() {
   if (currentMode === 'reorganized' || modeTransition.active) {
     stepReorganization();
   }
+  // PASS-16b: keep the line-label glued to its world anchor as the camera
+  // orbits/pans/zooms. No-op when the label is hidden.
+  updateLineLabelPosition();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
@@ -1089,7 +1308,13 @@ function computeReorganizedOffsets() {
     const dtA = p.dt / p.c;
     const dtB = p2.dt / p2.c;
     const dtAvg = (dtA + dtB) / 2;
-    edges.push({ a, b, sym: dtAvg, weight: Math.log(Math.min(p.c, p2.c) + 1) });
+    edges.push({
+      a, b,
+      sym: dtAvg,
+      weight: Math.log(Math.min(p.c, p2.c) + 1),
+      cA: p.c,    // articles a→b  (PASS-16: used by Compare tooltip)
+      cB: p2.c,   // articles b→a
+    });
   }
 
   console.log(`Reorganization: ${nodes.size} nodes, ${edges.length} edges with mutual data ` +
@@ -1417,11 +1642,23 @@ function computeUpDownOffsets(paneId, focalFips) {
   const N = nodeArr.length;
   const focalIdx = idx.get(focalFips);
 
-  // Effective radius per country (same as Mode II)
+  // Effective radius per country = polygon BBOX HALF-DIAGONAL of the
+  // largest shape. This is the circumscribed-circle radius: two countries
+  // whose centers are at least r_i + r_j apart cannot have overlapping
+  // polygons (each polygon is contained in its circle).
+  //
+  // PASS-13 FIX: removed the upper cap of 80 that previously crushed big
+  // countries (Russia ~130, Canada ~110) into the same simulation footprint
+  // as medium ones, causing visible polygon overlap in the pane. We also
+  // remember per-axis half-W and half-H so pane sizing can use a tight,
+  // axis-aware buffer rather than 2 * effRadius (which overstates a
+  // wide-and-flat country's vertical extent).
   const effRadius = new Float32Array(N);
+  const halfW = new Float32Array(N);
+  const halfH = new Float32Array(N);
   for (let i = 0; i < N; i++) {
     const c = COUNTRIES[nodeArr[i]];
-    let bestArea = 0, bestDiag = 8;
+    let bestArea = 0, bestDiag = 8, bestW = 0, bestH = 0;
     for (const sh of c.shapes) {
       let mn = Infinity, mx = -Infinity, mny = Infinity, mxy = -Infinity;
       for (const [lon, lat] of sh.outer) {
@@ -1430,20 +1667,39 @@ function computeUpDownOffsets(paneId, focalFips) {
       }
       const w = (mx - mn) * COORD_SCALE, h = (mxy - mny) * COORD_SCALE;
       const a = w * h;
-      if (a > bestArea) { bestArea = a; bestDiag = Math.sqrt(w*w + h*h) * 0.5; }
+      if (a > bestArea) {
+        bestArea = a;
+        bestDiag = Math.sqrt(w*w + h*h) * 0.5;
+        bestW = w; bestH = h;
+      }
     }
-    effRadius[i] = Math.max(6, Math.min(80, bestDiag));
+    effRadius[i] = Math.max(6, bestDiag);   // floor only, no upper cap
+    halfW[i] = bestW / 2;
+    halfH[i] = bestH / 2;
   }
 
-  // Distance schedule (same shape as Mode II, possibly slightly stretched
-  // since the focal-only view has fewer pairs and we want clearer visual gaps).
-  const BASELINE = 35;
+  // Distance schedule. The returned value is the GAP between polygon
+  // edges (added on top of effRadius[i] + effRadius[j] to get the
+  // center-to-center target). The schedule encodes:
+  //
+  //   sym = +2.0 → 4    extreme positive: effectively touching the focal
+  //   sym = +1.0 → 30   moderately positive: close, clear gap
+  //   sym =  0.0 → 70   BASELINE: comfortable, visibly distinct gap
+  //   sym = -1.0 → 160  moderately negative: clearly far
+  //   sym = -2.0 → 300  extreme negative: pushed to the edge of the pane
+  //
+  // PASS-13: BASELINE doubled and the negative end pushed out so neutral
+  // coverage has obvious breathing room and "moderately bad" is
+  // unmistakably farther than neutral. The previous schedule (BASELINE 35,
+  // -2 → 180) compressed all tiers into a tight clump around the focal,
+  // defeating the purpose of the mode.
+  const BASELINE = 70;
   function targetDistanceForSym(sym) {
     const s = Math.max(-2, Math.min(2, sym));
-    if (s >= 1)      return 4   + (1 - (s - 1)) * (18 - 4);
-    if (s >= 0)      return 18  + (1 - s)       * (BASELINE - 18);
-    if (s >= -1)     return BASELINE + (-s)     * (90 - BASELINE);
-    return 90 + (-(s + 1))     * (180 - 90);
+    if (s >= 1)      return 4   + (1 - (s - 1)) * (30 - 4);
+    if (s >= 0)      return 30  + (1 - s)       * (BASELINE - 30);
+    if (s >= -1)     return BASELINE + (-s)     * (160 - BASELINE);
+    return 160 + (-(s + 1))     * (300 - 160);
   }
 
   // Pair targets:
@@ -1537,7 +1793,7 @@ function computeUpDownOffsets(paneId, focalFips) {
   const CENTER_Z = 0.0006 * 1.8;  // stronger Z center pull (horizontal bias)
   const DAMP_X = 0.62;
   const DAMP_Z = 0.62 * 0.92;
-  const STEPS = 220;
+  const STEPS = 350;  // PASS-13: more steps to let the larger schedule settle
   const Z_BIAS = 0.5;  // Spring forces along Z scaled down → horizontal layout
 
   for (let step = 0; step < STEPS; step++) {
@@ -1601,9 +1857,10 @@ function computeUpDownOffsets(paneId, focalFips) {
     }
   }
 
-  // Scale & position: each pane occupies the full canvas width but only the
-  // top or bottom half. We MUST compress the layout to fit in half-height,
-  // otherwise content overflows the divider line into the other pane.
+  // Scale & position. The layout's natural extent depends on the
+  // schedule + effRadii; we scale to fit the pane but with a minimum-
+  // scale floor, because polygons themselves do NOT scale — shrinking
+  // positions too much pulls polygons into each other.
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (let i = 0; i < N; i++) {
     if (x[i] < minX) minX = x[i];
@@ -1613,20 +1870,120 @@ function computeUpDownOffsets(paneId, focalFips) {
   }
   const layoutW = maxX - minX || 1;
   const layoutH = maxZ - minZ || 1;
-  // Pane bounds: full width, half height, with margin. Account for the
-  // largest country's effective radius so polygons don't spill out.
-  let maxR = 0;
-  for (let i = 0; i < N; i++) if (effRadius[i] > maxR) maxR = effRadius[i];
-  const TARGET_W = MAP_W * 0.85 - 2 * maxR;
-  const TARGET_H = MAP_D * 0.42 - 2 * maxR;  // strictly less than half
-  const scale = Math.min(TARGET_W / layoutW, TARGET_H / layoutH);
-  // Center the bbox so the focal (which was at origin during sim) ends up
-  // centered in the pane.
+
+  // PASS-13: use actual max half-W and half-H (not effRadius, which is
+  // the half-DIAGONAL and overstates per-axis extent). For wide-and-flat
+  // countries like Russia this gives a much tighter, accurate buffer.
+  // We also use slightly more of the canvas (0.95 W × 0.46 H per pane).
+  let maxHalfW = 0, maxHalfH = 0;
+  for (let i = 0; i < N; i++) {
+    if (halfW[i] > maxHalfW) maxHalfW = halfW[i];
+    if (halfH[i] > maxHalfH) maxHalfH = halfH[i];
+  }
+  const TARGET_W = Math.max(60, MAP_W * 0.95 - 2 * maxHalfW);
+  const TARGET_H = Math.max(60, MAP_D * 0.46 - 2 * maxHalfH);
+
+  // Cap minimum scale at 0.65: going smaller compresses positions enough
+  // to introduce polygon overlap even after the simulation has placed
+  // centers correctly. If the layout is too big to fit at 0.65, we accept
+  // overflow past the pane bounds — the user's intent is NEVER OVERLAP,
+  // even at the cost of some countries spilling outside the pane.
+  const fitScale = Math.min(TARGET_W / layoutW, TARGET_H / layoutH);
+  const scale = Math.max(0.65, Math.min(1.4, fitScale));
+
+  // Center the layout's bbox on the pane origin. Focal won't be exactly
+  // centered if its neighbors cluster on one side, but the bbox centering
+  // gives the most balanced visual.
   const cx = (minX + maxX) / 2;
   const cz = (minZ + maxZ) / 2;
   for (let i = 0; i < N; i++) {
     x[i] = (x[i] - cx) * scale;
     z[i] = (z[i] - cz) * scale;
+  }
+
+  // PASS-14: integrated overlap repair + per-pane Z clamp.
+  //
+  // Two constraints to satisfy simultaneously:
+  //   (A) No two countries' circumscribed circles overlap.
+  //   (B) Each country's POLYGON (not just its center) stays in its pane,
+  //       with a clear margin from the divider and canvas edges.
+  //
+  // We alternate (A) and (B) inside a single loop and iterate until
+  // neither moves anything. Doing them in sequence (repair-then-clamp,
+  // or clamp-then-repair) lets one undo the other; alternating lets them
+  // settle into a layout where both hold.
+  //
+  // The Z-clamp uses halfH[i] (per-axis polygon half-height) so the
+  // POLYGON edge — not just the country's center — stays clear of the
+  // divider and edges. Previous passes only clamped centers, so big
+  // polygons could still bleed across the divider into the other pane.
+  const REPAIR_BUFFER = 4;        // tiny gap even at sym=+2 ("touching")
+  const REPAIR_PASSES = 80;
+  const DIVIDER_GAP = 26;         // total margin between the two panes
+  const HALF_DIVIDER = DIVIDER_GAP / 2;
+  const EDGE_BUFFER = 8;          // gap from canvas top/bottom edges
+  for (let pass = 0; pass < REPAIR_PASSES; pass++) {
+    let moved = false;
+
+    // (A) Pairwise overlap push-apart. Focal stays pinned at origin.
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const dx = x[j] - x[i];
+        const dz = z[j] - z[i];
+        const d = Math.sqrt(dx * dx + dz * dz);
+        const minDist = effRadius[i] + effRadius[j] + REPAIR_BUFFER;
+        if (d >= minDist) continue;
+        moved = true;
+        const overlap = (minDist - d) + 0.05;
+        let ux, uz;
+        if (d < 1e-3) {
+          // Coincident — pick a deterministic but i-varied direction
+          ux = Math.cos((i * 7 + j) * 0.41);
+          uz = Math.sin((i * 7 + j) * 0.41);
+        } else {
+          ux = dx / d; uz = dz / d;
+        }
+        if (i === focalIdx) {
+          x[j] += ux * overlap; z[j] += uz * overlap;
+        } else if (j === focalIdx) {
+          x[i] -= ux * overlap; z[i] -= uz * overlap;
+        } else {
+          x[i] -= ux * overlap * 0.5; z[i] -= uz * overlap * 0.5;
+          x[j] += ux * overlap * 0.5; z[j] += uz * overlap * 0.5;
+        }
+      }
+    }
+
+    // (B) Per-pane Z clamp by POLYGON EDGE, not center. Final z is
+    // (z[i] + paneShift); polygon spans final ± halfH[i].
+    //   Top pane    (paneShift = -MAP_D/4):
+    //     final - halfH ≥ -MAP_D/2 + EDGE_BUFFER   (above canvas top)
+    //     final + halfH ≤ -HALF_DIVIDER             (above divider gap)
+    //   Bottom pane (paneShift = +MAP_D/4):
+    //     final - halfH ≥ +HALF_DIVIDER             (below divider gap)
+    //     final + halfH ≤ +MAP_D/2 - EDGE_BUFFER    (above canvas bottom)
+    for (let i = 0; i < N; i++) {
+      if (i === focalIdx) continue;
+      let zMin, zMax;
+      if (paneId === 'up') {
+        zMin = -MAP_D/4 + EDGE_BUFFER + halfH[i];
+        zMax =  MAP_D/4 - HALF_DIVIDER - halfH[i];
+      } else {
+        zMin = -MAP_D/4 + HALF_DIVIDER + halfH[i];
+        zMax =  MAP_D/4 - EDGE_BUFFER - halfH[i];
+      }
+      if (zMin > zMax) {
+        // Country too tall to fit cleanly — center it in the pane and
+        // accept that it slightly nicks an edge. Rare in practice.
+        const target = (zMin + zMax) / 2;
+        if (Math.abs(z[i] - target) > 0.05) { z[i] = target; moved = true; }
+      } else {
+        if (z[i] < zMin) { z[i] = zMin; moved = true; }
+        if (z[i] > zMax) { z[i] = zMax; moved = true; }
+      }
+    }
+
+    if (!moved) break;
   }
 
   // After scaling+centering, layout fits in approximately
@@ -1652,6 +2009,19 @@ function computeUpDownOffsets(paneId, focalFips) {
     off.oz = z[i] + paneShift - geoZ;
     off.hidden = false;
   }
+
+  // PASS-16: cache the focal's directed delta_tone + count toward each
+  // non-focal country in this pane, so Compare lines/tooltips can read
+  // the values without re-aggregating ROWS on every hover. Only mentions
+  // we actually placed in the pane (idx.has) are kept.
+  const cachedEdges = [];
+  for (const [men, p] of focalDirected) {
+    if (men === focalFips) continue;
+    if (!idx.has(men)) continue;
+    cachedEdges.push({ fips: men, sym: p.dt / p.c, count: p.c });
+  }
+  if (paneId === 'up') updownPaneEdgesUp = cachedEdges;
+  else                 updownPaneEdgesDown = cachedEdges;
 
   return true;
 }
@@ -1770,6 +2140,7 @@ function stepReorganization() {
     rebuildBboxesForUpDown();
     applyFiltersWithTween(buildFilters());
     modeTransition.active = false;
+    refreshCompareVisuals();   // PASS-16
     return;
   }
 
@@ -1783,6 +2154,7 @@ function stepReorganization() {
   rebuildBboxesWithOffsets();
   applyFiltersWithTween(buildFilters());
   modeTransition.active = false;
+  refreshCompareVisuals();     // PASS-16
 }
 
 // Bbox cache for UP/DOWN mode. Each country may appear in either or both
@@ -1867,6 +2239,281 @@ function countryAtWorldXZ(wx, wz) {
 }
 
 // =========================================================================
+// PASS-16 — Compare feature
+//
+// When the user toggles Compare ON, the click-to-open-modal interaction is
+// replaced by click-to-set-reference (Mode II only — UP/DOWN uses the
+// per-pane focals as implicit references). With a reference active:
+//   - faint lines fan out from the reference to every other country in
+//     view, color-coded by tone (red=hostile, teal=friendly, dim=neutral)
+//   - hovering a country shows a comparison tooltip with the affinity
+//     score, tier label, and underlying article counts
+//   - the reference country gets a thin gold outline
+//
+// All compare visuals are children of compareGroup so they can be cleared
+// in one call. Lines use a single LineSegments mesh with vertex colors
+// (low-signal pairs get dimmer color baked in — there's no per-line alpha
+// in plain WebGL line materials, so we encode confidence in the color
+// itself rather than fighting transparency).
+// =========================================================================
+
+const compareGroup = new THREE.Group();
+scene.add(compareGroup);
+
+// Schedule tier label — buckets the symmetric/directed delta_tone into
+// the same five categories the layout's distance schedule uses.
+function compareTierLabel(sym) {
+  if (sym >=  1.5) return 'extreme positive';
+  if (sym >=  0.5) return 'close';
+  if (sym >  -0.5) return 'baseline';
+  if (sym >  -1.5) return 'far';
+  return 'very far';
+}
+
+// Look up the symmetric Mode-II edge for a pair of countries. REORG_EDGES
+// stores edges with a < b alphabetically; we normalize before searching.
+// Returns {sym, cA, cB} or null if no mutual data.
+function findReorgEdge(fipsA, fipsB) {
+  if (fipsA === fipsB) return null;
+  const a = fipsA < fipsB ? fipsA : fipsB;
+  const b = fipsA < fipsB ? fipsB : fipsA;
+  for (const e of REORG_EDGES) {
+    if (e.a === a && e.b === b) return e;
+  }
+  return null;
+}
+
+// World-space position of a country's centroid in the current mode.
+// In UP/DOWN this depends on which pane the country is in (a country
+// covered in both panes appears twice — caller passes paneId to disambiguate).
+function countryWorldPos(fips, paneId = null) {
+  const c = COUNTRIES[fips];
+  if (!c) return null;
+  const offMap = paneId === 'up'   ? COUNTRY_OFFSETS_UP
+              : paneId === 'down'  ? COUNTRY_OFFSETS_DOWN
+              :                      COUNTRY_OFFSETS;
+  const off = offMap.get(fips);
+  if (off && off.hidden) return null;
+  const ox = off ? off.ox : 0;
+  const oz = off ? off.oz : 0;
+  return { x: projLon(c.lon) + ox, z: projLat(c.lat) + oz };
+}
+
+// Sample the existing tone palette into an [r, g, b] in [0..1].
+// (Reuses toneColor's logic via the tmpColor scratch object.)
+function toneRGB(sym) {
+  toneColor(sym, tmpColor);
+  return [tmpColor.r, tmpColor.g, tmpColor.b];
+}
+
+// Dispose every Three.js child of compareGroup and remove them.
+function clearCompareVisuals() {
+  while (compareGroup.children.length > 0) {
+    const obj = compareGroup.children.pop();
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+      else obj.material.dispose();
+    }
+  }
+}
+
+// Build a thin gold outline mesh tracing the reference country's polygon
+// rings, slightly elevated so it sits above the basemap. Used in Mode II;
+// in UP/DOWN the focals are already gold-highlighted on the basemap canvas.
+function buildReferenceOutline(fips, paneId = null) {
+  const c = COUNTRIES[fips];
+  if (!c) return;
+  const pos = countryWorldPos(fips, paneId);
+  if (!pos) return;
+  // The world position uses the country's centroid + offset. For drawing
+  // the outline we need the offset alone (so each polygon vertex's lon/lat
+  // gets the same delta applied).
+  const ox = pos.x - projLon(c.lon);
+  const oz = pos.z - projLat(c.lat);
+  const mat = new THREE.LineBasicMaterial({
+    color: 0xc9a96e,
+    transparent: true,
+    opacity: 0.95,
+    depthTest: false,
+  });
+  for (const sh of c.shapes) {
+    const points = [];
+    for (const [lon, lat] of sh.outer) {
+      points.push(new THREE.Vector3(projLon(lon) + ox, 3.5, projLat(lat) + oz));
+    }
+    points.push(points[0].clone());  // close the loop
+    const geom = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geom, mat);
+    line.renderOrder = 999;          // draw last, above other transparents
+    compareGroup.add(line);
+  }
+}
+
+// Build a fan of lines from one reference position to a list of targets.
+// Each entry of `targets` is {pos: {x,z}, sym, count}. Color is the tone
+// palette for `sym`; intensity scales with |sym| × confidence so neutral /
+// low-signal pairs fade out while strong pairs pop.
+//   - This is a single LineSegments mesh: 2 vertices per line.
+function buildFanLines(refPos, targets) {
+  if (!refPos || targets.length === 0) return;
+  const positions = new Float32Array(targets.length * 6);     // 2 verts × 3 coords
+  const colors    = new Float32Array(targets.length * 6);
+  const Y = 2.5;  // slightly above basemap, below most mountains
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
+    if (!t.pos) continue;
+    const [r, g, b] = toneRGB(t.sym);
+    // Intensity: combine |sym| (0..2) with log-confidence (0..~5)
+    const symStrength = Math.min(1, Math.abs(t.sym) / 1.5);
+    const conf = Math.min(1, Math.log((t.count || 0) + 1) / 4);
+    const intensity = 0.25 + 0.75 * Math.max(symStrength, conf * 0.6);
+    const o = i * 6;
+    positions[o + 0] = refPos.x; positions[o + 1] = Y; positions[o + 2] = refPos.z;
+    positions[o + 3] = t.pos.x;  positions[o + 4] = Y; positions[o + 5] = t.pos.z;
+    colors[o + 0] = r * intensity; colors[o + 1] = g * intensity; colors[o + 2] = b * intensity;
+    colors[o + 3] = r * intensity; colors[o + 4] = g * intensity; colors[o + 5] = b * intensity;
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.85,
+    depthTest: false,
+  });
+  const lines = new THREE.LineSegments(geom, mat);
+  lines.renderOrder = 998;
+  compareGroup.add(lines);
+}
+
+// Master rebuild: re-derive all compare visuals from current state. Called
+// when Compare toggles, when the reference changes, after layout re-runs
+// (filter changes), and on mode switches.
+function refreshCompareVisuals() {
+  clearCompareVisuals();
+  if (!compareState.on) return;
+
+  if (currentMode === 'reorganized') {
+    if (!compareState.refFips) return;
+    const refPos = countryWorldPos(compareState.refFips);
+    if (!refPos) return;
+    // One pass over REORG_EDGES to collect the reference's neighbors;
+    // avoids an O(N · |edges|) scan inside the country loop below.
+    const refEdges = new Map();
+    for (const e of REORG_EDGES) {
+      if (e.a === compareState.refFips)      refEdges.set(e.b, e);
+      else if (e.b === compareState.refFips) refEdges.set(e.a, e);
+    }
+    const targets = [];
+    for (const fips in COUNTRIES) {
+      if (fips === compareState.refFips) continue;
+      const off = COUNTRY_OFFSETS.get(fips);
+      if (off && off.hidden) continue;     // not in current filter
+      const e = refEdges.get(fips);
+      if (!e) continue;                    // no mutual data → no line
+      const tpos = countryWorldPos(fips);
+      if (!tpos) continue;
+      targets.push({ pos: tpos, sym: e.sym, count: Math.min(e.cA, e.cB) });
+    }
+    buildFanLines(refPos, targets);
+    buildReferenceOutline(compareState.refFips);
+  } else if (currentMode === 'updown') {
+    // Lines from each pane's focal to its non-focal neighbors. Focals are
+    // already gold-highlighted on the basemap canvas, so no extra outline.
+    if (updownTopFips) {
+      const refPos = countryWorldPos(updownTopFips, 'up');
+      const targets = updownPaneEdgesUp.map(e => ({
+        pos: countryWorldPos(e.fips, 'up'),
+        sym: e.sym, count: e.count,
+      })).filter(t => t.pos);
+      buildFanLines(refPos, targets);
+    }
+    if (updownBottomFips) {
+      const refPos = countryWorldPos(updownBottomFips, 'down');
+      const targets = updownPaneEdgesDown.map(e => ({
+        pos: countryWorldPos(e.fips, 'down'),
+        sym: e.sym, count: e.count,
+      })).filter(t => t.pos);
+      buildFanLines(refPos, targets);
+    }
+  }
+}
+
+// Exposed helpers used by the click handler and toggle button.
+function setCompareReference(fips) {
+  compareState.refFips = fips;
+  refreshCompareVisuals();
+}
+function clearCompareReference() {
+  compareState.refFips = null;
+  refreshCompareVisuals();
+}
+
+// PASS-16b: floating affinity-score label anchored to the midpoint of the
+// reference→hovered line. The element is fixed-positioned in screen space;
+// each frame we project the world-space midpoint to screen coords and
+// move it. World-space anchoring (rather than cursor-following) makes the
+// label feel attached to the line, which is what makes it read as "the
+// number FOR THIS line" rather than "a tooltip near the cursor".
+// (lineLabelEl and compareLineLabel are hoisted to the top of the module
+// — onMouseMove can fire before this section in the file is reached.)
+function showLineLabel(refPos, tgtPos, sym) {
+  // Anchor at the midpoint of the line, slightly elevated so it visually
+  // floats above the line itself.
+  compareLineLabel.midpoint.set(
+    (refPos.x + tgtPos.x) / 2,
+    5,
+    (refPos.z + tgtPos.z) / 2,
+  );
+  compareLineLabel.active = true;
+  const symText = (sym >= 0 ? '+' : '') + sym.toFixed(2);
+  const tier = compareTierLabel(sym);
+  lineLabelEl.innerHTML = symText + ` <span class="tier">${tier}</span>`;
+  lineLabelEl.classList.remove('neg', 'pos');
+  if      (sym < -0.5) lineLabelEl.classList.add('neg');
+  else if (sym >  0.5) lineLabelEl.classList.add('pos');
+  lineLabelEl.classList.add('visible');
+}
+function hideLineLabel() {
+  compareLineLabel.active = false;
+  lineLabelEl.classList.remove('visible');
+}
+
+// Update the label's screen position from its world-space anchor. Called
+// each frame from tick(); cheap (one Vector3.project + 2 mutations).
+function updateLineLabelPosition() {
+  if (!compareLineLabel.active) return;
+  const v = compareLineLabel.midpoint.clone().project(camera);
+  if (v.z >= 1) {
+    // Behind the camera — hide rather than render in a wrong spot
+    lineLabelEl.classList.remove('visible');
+    return;
+  }
+  // .project gives NDC in [-1, +1]; convert to viewport pixels.
+  const x = (v.x + 1) * 0.5 * window.innerWidth;
+  const y = (1 - v.y) * 0.5 * window.innerHeight;
+  lineLabelEl.style.left = `${x}px`;
+  lineLabelEl.style.top  = `${y}px`;
+  if (!lineLabelEl.classList.contains('visible')) {
+    lineLabelEl.classList.add('visible');
+  }
+}
+
+// Update enabled state and label of the Compare button. Called on mode
+// changes. Disabled in Geographic (distance has no semantic meaning when
+// countries are at their real geographic positions).
+function updateCompareButtonState() {
+  const btn = document.getElementById('compare-btn');
+  if (!btn) return;
+  const allowed = currentMode === 'reorganized' || currentMode === 'updown';
+  btn.disabled = !allowed;
+  btn.classList.toggle('active', compareState.on && allowed);
+  btn.textContent = 'Compare: ' + (compareState.on && allowed ? 'On' : 'Off');
+}
+
+// =========================================================================
 // Mode toggle handler
 // =========================================================================
 
@@ -1874,15 +2521,25 @@ function setMode(targetMode) {
   if (currentMode === targetMode) return;
   if (modeTransition.active) return;
 
+  // Run entry guards FIRST (no side-effects yet)
+  if (targetMode === 'updown' && filterState.countries.size !== 2) {
+    console.warn('UP/DOWN: requires exactly 2 countries selected');
+    return;
+  }
+
+  // PASS-15: switch the world's extent (W and D) before computing offsets
+  // so UP/DOWN gets the wider + taller canvas it needs. Geo/Reorganized
+  // go back to the standard 2:1 aspect.
+  if (targetMode === 'updown') {
+    setMapDimensions(MAP_W_UPDOWN, MAP_D_UPDOWN);
+  } else {
+    setMapDimensions(MAP_W_BASE, MAP_D_BASE);
+  }
+
   // Handle entry into each mode
   if (targetMode === 'reorganized') {
     computeReorganizedOffsets();
   } else if (targetMode === 'updown') {
-    // Entry guard: must have exactly 2 countries selected
-    if (filterState.countries.size !== 2) {
-      console.warn('UP/DOWN: requires exactly 2 countries selected');
-      return;
-    }
     const arr = [...filterState.countries];
     updownTopFips = arr[0];
     updownBottomFips = arr[1];
@@ -1890,6 +2547,7 @@ function setMode(targetMode) {
     const okDown = computeUpDownOffsets('down', updownBottomFips);
     if (!okUp || !okDown) {
       console.warn('UP/DOWN: insufficient data for one of the focal countries');
+      setMapDimensions(MAP_W_BASE, MAP_D_BASE);  // revert the dimension change
       return;
     }
     // Elevation toggle stays user-controlled in UP/DOWN mode (mountains will
@@ -1906,6 +2564,14 @@ function setMode(targetMode) {
   currentMode = targetMode;
   modeTransition.active = true;
   modeTransition.startTime = performance.now();
+
+  // PASS-16: clear any active Compare reference when leaving the modes
+  // where it applies. Visuals are rebuilt by refreshCompareVisuals() in
+  // stepReorganization (after the layout has snapped to its new state).
+  if (targetMode !== 'reorganized') compareState.refFips = null;
+  if (targetMode === 'geo' && compareState.on) compareState.on = false;
+  hideLineLabel();
+  updateCompareButtonState();
 
   const indicator = document.getElementById('meta-mode');
   if (indicator) {
@@ -2427,6 +3093,24 @@ if (elevationBtn) {
   });
 }
 
+// PASS-16: Compare toggle. Toggles the feature on/off; the active state
+// drives whether clicks on countries set a reference (Mode II) or open the
+// detail modal (default), and whether the comparison tooltip + lines are
+// shown.
+const compareBtnEl = document.getElementById('compare-btn');
+if (compareBtnEl) {
+  compareBtnEl.addEventListener('click', () => {
+    if (compareBtnEl.disabled) return;
+    compareState.on = !compareState.on;
+    if (!compareState.on) compareState.refFips = null;
+    if (!compareState.on) hideLineLabel();
+    updateCompareButtonState();
+    refreshCompareVisuals();
+  });
+}
+// Set initial enabled state to match starting mode (Geographic ⇒ disabled).
+updateCompareButtonState();
+
 document.getElementById('method-link').addEventListener('click', () =>
   document.getElementById('method-modal').classList.add('open'));
 document.getElementById('method-close').addEventListener('click', () =>
@@ -2830,7 +3514,19 @@ renderer.domElement.addEventListener('mouseup', e => {
   if (!hits.length) return;
   const p = hits[0].point;
   const fips = countryAtWorldXZ(p.x, p.z);
-  if (fips) openCountryModal(fips);
+  if (!fips) return;
+
+  // PASS-16: in Reorganized mode with Compare on, click sets/toggles the
+  // reference instead of opening the modal. UP/DOWN ignores click for
+  // reference-setting (focals are tied to the country picker), so its
+  // clicks still go to the modal even when Compare is on. Geographic
+  // never has Compare available, so plain click → modal as always.
+  if (compareState.on && currentMode === 'reorganized') {
+    if (compareState.refFips === fips) clearCompareReference();
+    else                               setCompareReference(fips);
+    return;
+  }
+  openCountryModal(fips);
 });
 
 // Resize

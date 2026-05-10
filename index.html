@@ -184,6 +184,74 @@
     color: var(--accent);
   }
 
+  /* PASS-16: floating affinity-score label anchored to the midpoint of the
+     reference→hovered line in Compare mode. Position is updated each frame
+     by projecting the midpoint to screen coords. */
+  .line-label {
+    position: fixed;
+    pointer-events: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-1);
+    background: rgba(10, 13, 18, 0.92);
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    transform: translate(-50%, -50%);
+    letter-spacing: 0.04em;
+    z-index: 25;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    white-space: nowrap;
+  }
+  .line-label.visible { opacity: 1; }
+  .line-label.neg { color: #ec8260; border-color: #4a2820; }
+  .line-label.pos { color: #88c89a; border-color: #244832; }
+  .line-label .tier {
+    color: var(--text-3);
+    margin-left: 6px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Compare toggle — sits to the right of elevation. Disabled in Geographic
+     mode (distance has no meaning when countries are at their real positions). */
+  .compare-toggle {
+    position: fixed; top: 64px; left: 880px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 4px;
+    z-index: 10;
+  }
+  .compare-toggle button {
+    background: transparent;
+    border: none;
+    color: var(--text-2);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    border-radius: 1px;
+  }
+  .compare-toggle button:hover { color: var(--text-1); }
+  .compare-toggle button.active {
+    background: var(--bg-mid);
+    color: var(--accent);
+  }
+  .compare-toggle button:disabled {
+    color: var(--text-3);
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .compare-toggle button:disabled:hover { color: var(--text-3); }
+
   /* Stats panel — bottom-left */
   .stats {
     position: fixed; bottom: 50px; left: 28px;
@@ -988,6 +1056,10 @@
   <button id="elevation-btn" class="active">Elevation: On</button>
 </div>
 
+<div class="compare-toggle" id="compare-toggle" title="Compare distances between countries (Reorganized and UP/DOWN modes)">
+  <button id="compare-btn" disabled>Compare: Off</button>
+</div>
+
 <div class="method-link" id="method-link">Methodology</div>
 
 <div class="method-modal" id="method-modal">
@@ -1055,6 +1127,10 @@
   <div class="row"><span class="lbl">Top targets</span><span class="v" id="tt-targets">—</span></div>
   <div class="row"><span class="lbl">Bloc</span><span class="v" id="tt-bloc">—</span></div>
 </div>
+
+<!-- PASS-16: small floating label anchored to the midpoint of the
+     reference→hovered line in Compare mode. Shows the affinity score. -->
+<div class="line-label" id="line-label">—</div>
 
 <div class="country-modal" id="country-modal">
   <div class="panel">
