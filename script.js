@@ -7,6 +7,7 @@ import * as THREE from 'three';
 // in tick() and the input handlers, which run before the Mode II module
 // block initializes. Declaring them here keeps them out of the temporal
 // dead zone.
+
 let currentMode = 'geo';
 const modeTransition = { active: false, startTime: 0, durationMs: 1400 };
 // COUNTRY_OFFSETS is also forward-declared because makeBasemapTexture()
@@ -24,11 +25,37 @@ let updownBottomFips = null;
 let elevationOn = true;
 let elevationBtn = null;  // assigned at element-init time
 
-const RAW = JSON.parse(document.getElementById('flows-data').textContent);
-const COUNTRIES = RAW.countries;
-const FLOWS = RAW.flows;
-const ROWS = FLOWS.rows;
-const ARTICLE_INDEX = FLOWS.articles || {};  // fips -> [{date, url, source, tone, mentioned, domains}, ...]
+// Data is split across files inside ./data/ (was a single inline blob in
+// the all-in-one HTML build). Flows are split by domain (the primary toggle
+// in the UI) and countries are split by FIPS code (one file per country),
+// with an index.json manifest because browsers can't list directories.
+//   data/countries/index.json:  [ "AC", "AE", "AF", ... ]
+//   data/countries/<FIPS>.json: { name, lat, lon, bloc, shapes }
+//   data/articles.json:         { FIPS: [ {date, url, source, tone, mentioned, domains}, ... ] }
+//   data/flows/<domain>.json:   [ {date, reporter, mentioned, domain, count, avg_tone, delta_tone}, ... ]
+const fetchJson = url => fetch(url).then(r => {
+  if (!r.ok) throw new Error(`Failed to fetch ${url}: ${r.status} ${r.statusText}`);
+  return r.json();
+});
+
+async function loadCountries() {
+  const fipsList = await fetchJson('data/countries/index.json');
+  const entries = await Promise.all(
+    fipsList.map(fips =>
+      fetchJson(`data/countries/${fips}.json`).then(c => [fips, c])
+    )
+  );
+  return Object.fromEntries(entries);
+}
+
+const [COUNTRIES, ARTICLE_INDEX, politicsFlows, scienceFlows, sportsFlows] = await Promise.all([
+  loadCountries(),
+  fetchJson('data/articles.json'),
+  fetchJson('data/flows/politics.json'),
+  fetchJson('data/flows/science.json'),
+  fetchJson('data/flows/sports.json'),
+]);
+const ROWS = [...politicsFlows, ...scienceFlows, ...sportsFlows];
 const totalArts = Object.values(ARTICLE_INDEX).reduce((s, a) => s + a.length, 0);
 console.log(`Loaded ${ROWS.length} rows, ${Object.keys(COUNTRIES).length} country polygons, ` +
             `${totalArts} retained articles across ${Object.keys(ARTICLE_INDEX).length} reporters`);
