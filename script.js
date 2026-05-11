@@ -67,14 +67,19 @@ import { initCountryModal, openCountryModal } from './modal.js';
 // ---------------------------------------------------------------------------
 const COORD_SCALE = 1.5;
 // PASS-15: MAP_W and MAP_D are dynamic. Geo and Reorganized modes use
-// the BASE values (540 × 270 — standard 2:1 world canvas). UP/DOWN swaps
-// to wider+taller dimensions so two stacked panes can each fit a full
-// world's worth of countries without clipping at the edges. Mode change
-// rebuilds the basemap mesh + frame.
-const MAP_W_BASE = 540;
-const MAP_W_UPDOWN = 800;
-const MAP_D_BASE = 270;
-const MAP_D_UPDOWN = 400;
+// the BASE values (540 × 270 — standard 2:1 world canvas) for Geographic.
+// Reorganized gets its own slightly wider/taller canvas so force-sim
+// spread doesn't push countries off the basemap. UP/DOWN gets the widest
+// canvas of all: its strong-negative distance ring (BASELINE × 8.5 ≈ 595
+// units from each focal, plus polygon half-widths) needs real room, and
+// the user wants the distance schedule preserved verbatim.
+// Mode change rebuilds the basemap mesh + frame.
+const MAP_W_BASE   = 540;   // Geographic
+const MAP_D_BASE   = 270;
+const MAP_W_REORG  = 900;   // Reorganized (Mode II)
+const MAP_D_REORG  = 450;
+const MAP_W_UPDOWN = 1400;  // UP/DOWN (Mode III)
+const MAP_D_UPDOWN = 700;
 let MAP_W = MAP_W_BASE;
 let MAP_D = MAP_D_BASE;
 function projLon(lon) { return lon * COORD_SCALE; }
@@ -2460,11 +2465,14 @@ function setMode(targetMode) {
     return;
   }
 
-  // PASS-15: switch the world's extent (W and D) before computing offsets
-  // so UP/DOWN gets the wider + taller canvas it needs. Geo/Reorganized
-  // go back to the standard 2:1 aspect.
+  // Switch the world's extent (W and D) before computing offsets so each
+  // mode gets the canvas it needs. Geographic uses the standard 2:1
+  // world. Reorganized and UP/DOWN each get progressively more room so
+  // their layouts don't clip at the edges.
   if (targetMode === 'updown') {
     setMapDimensions(MAP_W_UPDOWN, MAP_D_UPDOWN);
+  } else if (targetMode === 'reorganized') {
+    setMapDimensions(MAP_W_REORG, MAP_D_REORG);
   } else {
     setMapDimensions(MAP_W_BASE, MAP_D_BASE);
   }
@@ -2480,7 +2488,13 @@ function setMode(targetMode) {
     const okDown = computeUpDownOffsets('down', updownBottomFips);
     if (!okUp || !okDown) {
       console.warn('UP/DOWN: insufficient data for one of the focal countries');
-      setMapDimensions(MAP_W_BASE, MAP_D_BASE);  // revert the dimension change
+      // Revert to the canvas the previous mode was using so we don't jump
+      // the user into a smaller world than they had.
+      if (currentMode === 'reorganized') {
+        setMapDimensions(MAP_W_REORG, MAP_D_REORG);
+      } else {
+        setMapDimensions(MAP_W_BASE, MAP_D_BASE);
+      }
       return;
     }
     // Elevation toggle stays user-controlled in UP/DOWN mode (mountains will
