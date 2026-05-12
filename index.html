@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Global Sentiment Flow-Mapper · Pass 5</title>
+<title>Global Sentiment Flow-Mapper</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +19,7 @@
     --text-2:     #8a93a3;
     --text-3:     #5b6473;
 
-    /* Tone palette — atlas-style: ember red, neutral slate, moss/teal */
+    /* Tone palette: atlas-style: ember red, neutral slate, moss/teal */
     --tone-neg-3: #b83322;
     --tone-neg-2: #e86a3a;
     --tone-neg-1: #d0a070;
@@ -81,6 +81,41 @@
     line-height: 1.7;
   }
 
+  /* Language switcher */
+  .lang-switch {
+    pointer-events: auto;
+    display: inline-flex;
+    background: rgba(20, 25, 33, 0.55);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 2px;
+    margin-right: 18px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .lang-switch button {
+    background: transparent;
+    border: none;
+    color: var(--text-3);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 5px 9px;
+    cursor: pointer;
+    border-radius: 1px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .lang-switch button:hover { color: var(--text-1); }
+  .lang-switch button.active {
+    background: var(--text-1);
+    color: var(--bg-deepest);
+  }
+  .lang-switch button[data-lang="zh"] {
+    font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
+  }
+  .topbar .meta { display: flex; align-items: center; }
+  .topbar .meta .readouts { text-align: right; }
+
   /* Domain toggle */
   .toggle {
     position: fixed; top: 64px; left: 28px;
@@ -119,7 +154,7 @@
     letter-spacing: 0.1em;
   }
 
-  /* Mode toggle (Geography / Affinity) — sits to the right of the domain toggle */
+  /* Mode toggle (Geography / Affinity): sits to the right of the domain toggle */
   .mode-toggle {
     position: fixed; top: 64px; left: 350px;
     background: var(--bg-panel);
@@ -216,7 +251,7 @@
     text-transform: uppercase;
   }
 
-  /* Compare toggle — sits to the right of elevation. Disabled in Geographic
+  /* Compare toggle: sits to the right of elevation. Disabled in Geographic
      mode (distance has no meaning when countries are at their real positions). */
   .compare-toggle {
     position: fixed; top: 64px; left: 880px;
@@ -252,7 +287,7 @@
   }
   .compare-toggle button:disabled:hover { color: var(--text-3); }
 
-  /* Stats panel — bottom-left */
+  /* Stats panel: bottom-left */
   .stats {
     position: fixed; bottom: 50px; left: 28px;
     background: var(--bg-panel);
@@ -283,7 +318,7 @@
   .stats .row { display: flex; justify-content: space-between; }
   .stats .row .v { color: var(--text-1); }
 
-  /* Legend — lower-right, sits above filter bar */
+  /* Legend: lower-right, sits above filter bar */
   .legend {
     position: fixed; bottom: 50px; right: 28px;
     background: var(--bg-panel);
@@ -685,7 +720,7 @@
   .pill-row button.tone-pos.on { border-color: #5cab6a; color: #88c89a; }
   .pill-row button.tone-zero.on { border-color: var(--text-3); }
 
-  /* Reporters group — tabs, select-all buttons, country search */
+  /* Reporters group: tabs, select-all buttons, country search */
   .reporters-tabs {
     display: flex;
     gap: 2px;
@@ -1025,7 +1060,7 @@
 </head>
 <body>
 
-<div class="loader" id="loader"><div class="dot"></div>Loading sentiment flows</div>
+<div class="loader" id="loader"><div class="dot"></div><span data-i18n="loader">Loading sentiment flows</span></div>
 
 <div id="scene"></div>
 
@@ -1034,22 +1069,29 @@
     Global Sentiment Flow-Mapper
   </div>
   <div class="meta" id="meta-readout">
-    <div id="meta-mode">Mode I · Geographic Topography</div>
-    <div id="meta-window">21 days aggregated</div>
+    <div class="lang-switch" role="group" aria-label="Language">
+      <button data-lang="en" class="active">EN</button>
+      <button data-lang="zh">中文</button>
+    </div>
+    <div class="readouts">
+      <div id="meta-mode">Mode I · Geographic</div>
+      <div id="meta-window">21 days aggregated</div>
+    </div>
   </div>
 </div>
 
 <div class="toggle" id="domain-toggle">
-  <button data-domain="politics" class="active">Politics</button>
-  <button data-domain="science">Science</button>
-  <!-- <button data-domain="sports">Sports<span class="badge">limited</span></button> -->
-  <button data-domain="sports">Sports</button>
+  <button data-domain="politics" class="active" data-i18n="domain.politics">Politics</button>
+  <button data-domain="science"                data-i18n="domain.science">Science</button>
+  <button data-domain="sports"                 data-i18n="domain.sports">Sports</button>
 </div>
 
 <div class="mode-toggle" id="mode-toggle">
-  <button data-mode="geo" class="active">Geographic</button>
-  <button data-mode="reorganized">Reorganized</button>
-  <button data-mode="updown" disabled title="Select exactly 2 countries (in Reporters → By Country) to enable">UP/DOWN</button>
+  <button data-mode="geo" class="active" data-i18n="mode.geo">Geographic</button>
+  <button data-mode="reorganized"        data-i18n="mode.reorganized">Reorganized</button>
+  <button data-mode="updown" disabled
+          data-i18n="mode.updown"
+          data-i18n-attr="title:mode.updown.title">UP/DOWN</button>
 </div>
 
 <div class="elevation-toggle" id="elevation-toggle" title="Toggle terrain elevation">
@@ -1060,60 +1102,30 @@
   <button id="compare-btn" disabled>Compare: Off</button>
 </div>
 
-<div class="method-link" id="method-link">Methodology</div>
+<div class="method-link" id="method-link" data-i18n="about.link">About</div>
 
 <div class="method-modal" id="method-modal">
   <div class="panel">
-    <button class="close" id="method-close">Close ×</button>
-    <h2>Methodology &amp; Limitations</h2>
-
-    <h3>Source</h3>
-    <p>GDELT 2.0 Global Knowledge Graph, sampled every 4 hours (6 files/day) across three weeks chosen for thematic contrast: late October 2025 (US election cycle), late February 2026 (Milano-Cortina Winter Olympics), and mid-April 2026 (recent science/tech cycle).</p>
-
-    <h3>Topography</h3>
-    <p>The world is rendered as a single continuous heightfield mesh (~28,000 vertices). Each vertex's elevation is the sum of contributions from all reporting countries within its <em>region of influence</em>. A country's influence radius scales with its land area (about 4&deg; for Israel, up to 16&deg; for Russia), so reporting from large countries shapes a broader landscape than reporting from small ones.</p>
-
-    <h3>Per-Vertex Elevation</h3>
-    <p>For each country C and each vertex V within range, the contribution is:<br>
-    <code>log(C.count + 1) &times; SCALE &times; falloff(distance(V, C), C.radius)</code><br>
-    where <code>falloff</code> is a smooth cosine bump that peaks at the country's centroid and drops to zero at its radius. Contributions are summed with a hard cap to prevent runaway peaks where many active countries overlap.</p>
-
-    <h3>Per-Vertex Color and Texture</h3>
-    <p>Each vertex's color is the contribution-weighted average tone of nearby countries. High-volume countries dominate the color near them. Negative-tone regions also receive per-vertex displacement noise &mdash; small randomized height jitter that gives them a rough, broken silhouette. Positive-tone regions stay smooth.</p>
-
-    <h3>What This Does Well &mdash; And What It Doesn't</h3>
-    <p><strong>Well:</strong> The landscape reads as topography. Multi-country regions (e.g., Western Europe) form proper mountain ranges with ridges and valleys. The eye can pick out major reporting hubs at a glance.<br>
-    <strong>Less well:</strong> Country boundaries are hinted at by the basemap below the heightfield, but elevations spill across borders. This is geographically a small lie &mdash; a country's signal influences a region beyond its actual territory. We trade strict geographic fidelity for a readable landscape.</p>
-
-    <h3>What Tone Means &mdash; Honestly</h3>
-    <p>GDELT's tone is a noisy signal. It blends sentiment of language used, the inherent valence of the topic (a hurricane scores negative even when reporting is sympathetic), and source-level editorial bias. Treat colors as <strong>directional indicators</strong>, not precise measurements.</p>
-
-    <h3>Reporter Country Attribution</h3>
-    <p>Derived from the publishing URL's TLD or, for generic <code>.com</code>/<code>.org</code> domains, a curated lookup of major outlets. About 13% of GDELT records are kept &mdash; the rest drop because we couldn't confidently country-attribute them. <strong>This biases the dataset toward English-language Western media.</strong> Russian, Chinese, and many regional outlets are systematically underrepresented.</p>
-
-    <h3>Sports Coverage Is Thin</h3>
-    <p>GDELT's theme taxonomy doesn't strongly tag sports content. Even during Olympics week, our keep rate for sports articles is low. The "limited" flag in the toggle reflects this.</p>
-
-    <h3>Schadenfreude / Affinity Math (used in Mode II)</h3>
-    <p>For each (reporter, mentioned, domain, date) bucket, we compute a <code>delta_tone</code> equal to the bucket's mean tone minus the global mean tone toward that mentioned country in the same domain on the same date. This isolates reporter-specific bias from the inherent valence of the underlying events.</p>
+    <button class="close" id="method-close"><span data-i18n="common.close">Close</span> ×</button>
+    <div id="about-panel" data-i18n-html="about.body"></div>
   </div>
 </div>
 
 <div class="stats" id="stats">
   <div class="panel-handle">
-    <span class="label">Active Domain</span>
+    <span class="label" data-i18n="stats.activeDomain">Active Domain</span>
     <span class="toggle-icon">▼</span>
   </div>
-  <div class="row"><span>Reporters</span><span class="v" id="s-reporters">—</span></div>
-  <div class="row"><span>Mentioned</span><span class="v" id="s-mentioned">—</span></div>
-  <div class="row"><span>Articles</span><span class="v" id="s-articles">—</span></div>
-  <div class="row"><span>Pairs</span><span class="v" id="s-pairs">—</span></div>
-  <div class="row"><span>Mean Tone</span><span class="v" id="s-tone">—</span></div>
+  <div class="row"><span data-i18n="stats.reporters">Reporters</span><span class="v" id="s-reporters">–</span></div>
+  <div class="row"><span data-i18n="stats.mentioned">Mentioned</span><span class="v" id="s-mentioned">–</span></div>
+  <div class="row"><span data-i18n="stats.articles">Articles</span><span class="v" id="s-articles">–</span></div>
+  <div class="row"><span data-i18n="stats.pairs">Pairs</span><span class="v" id="s-pairs">–</span></div>
+  <div class="row"><span data-i18n="stats.meanTone">Mean Tone</span><span class="v" id="s-tone">–</span></div>
 </div>
 
 <div class="legend" id="legend">
   <div class="panel-handle">
-    <span class="label">Mean Tone (avg_tone)</span>
+    <span class="label" data-i18n="legend.meanTone">Mean Tone (avg_tone)</span>
     <span class="toggle-icon">▼</span>
   </div>
   <div class="gradient"></div>
@@ -1121,41 +1133,41 @@
 </div>
 
 <div class="tooltip" id="tooltip">
-  <div class="name" id="tt-name">—</div>
-  <div class="row"><span class="lbl">Articles published</span><span class="v" id="tt-out">—</span></div>
-  <div class="row"><span class="lbl">Mean tone (out)</span><span class="v" id="tt-tone">—</span></div>
-  <div class="row"><span class="lbl">Top targets</span><span class="v" id="tt-targets">—</span></div>
-  <div class="row"><span class="lbl">Bloc</span><span class="v" id="tt-bloc">—</span></div>
+  <div class="name" id="tt-name">–</div>
+  <div class="row"><span class="lbl" data-i18n="tooltip.articlesPublished">Articles published</span><span class="v" id="tt-out">–</span></div>
+  <div class="row"><span class="lbl" data-i18n="tooltip.meanToneOut">Mean tone (out)</span><span class="v" id="tt-tone">–</span></div>
+  <div class="row"><span class="lbl" data-i18n="tooltip.topTargets">Top targets</span><span class="v" id="tt-targets">–</span></div>
+  <div class="row"><span class="lbl" data-i18n="tooltip.bloc">Bloc</span><span class="v" id="tt-bloc">–</span></div>
 </div>
 
 <!-- PASS-16: small floating label anchored to the midpoint of the
      reference→hovered line in Compare mode. Shows the affinity score. -->
-<div class="line-label" id="line-label">—</div>
+<div class="line-label" id="line-label">–</div>
 
 <div class="country-modal" id="country-modal">
   <div class="panel">
-    <button class="close" id="country-modal-close">Close ×</button>
-    <h2 id="cm-name">—</h2>
+    <button class="close" id="country-modal-close"><span data-i18n="common.close">Close</span> ×</button>
+    <h2 id="cm-name">–</h2>
     <div class="country-meta">
-      <span id="cm-fips">—</span>
+      <span id="cm-fips">–</span>
       <span class="sep">·</span>
-      <span id="cm-bloc">—</span>
+      <span id="cm-bloc">–</span>
     </div>
     <div class="summary">
-      <div class="stat"><span class="v" id="cm-articles">—</span><span class="lbl">Articles</span></div>
-      <div class="stat"><span class="v" id="cm-tone">—</span><span class="lbl">Mean Tone</span></div>
-      <div class="stat"><span class="v" id="cm-pairs">—</span><span class="lbl">Targets</span></div>
-      <div class="stat"><span class="v" id="cm-days">—</span><span class="lbl">Active Days</span></div>
+      <div class="stat"><span class="v" id="cm-articles">–</span><span class="lbl" data-i18n="cm.articles">Articles</span></div>
+      <div class="stat"><span class="v" id="cm-tone">–</span><span class="lbl" data-i18n="cm.meanTone">Mean Tone</span></div>
+      <div class="stat"><span class="v" id="cm-pairs">–</span><span class="lbl" data-i18n="cm.targets">Targets</span></div>
+      <div class="stat"><span class="v" id="cm-days">–</span><span class="lbl" data-i18n="cm.activeDays">Active Days</span></div>
     </div>
     <div id="cm-charts"></div>
-    <div class="filter-context" id="cm-filters">Showing all data</div>
+    <div class="filter-context" id="cm-filters" data-i18n="cm.showingAll">Showing all data</div>
   </div>
 </div>
 
 <div class="filterbar" id="filterbar">
   <div class="handle" id="filterbar-handle">
     <span class="label">
-      Filters
+      <span data-i18n="filter.filters">Filters</span>
       <span class="active-count" id="filter-summary">All days · all regions · all tones</span>
     </span>
     <span class="toggle-icon">▲</span>
@@ -1164,7 +1176,7 @@
 
     <div class="group">
       <div class="head">
-        <span class="title">Time Window</span>
+        <span class="title" data-i18n="filter.timeWindow">Time Window</span>
         <span class="v" id="time-readout">21 days</span>
       </div>
       <div class="time-slider" id="time-slider">
@@ -1173,52 +1185,53 @@
         <input type="range" id="time-min" min="0" max="20" value="0" step="1">
         <input type="range" id="time-max" min="0" max="20" value="20" step="1">
         <div class="ticks">
-          <span id="tick-min">—</span>
-          <span id="tick-max">—</span>
+          <span id="tick-min">–</span>
+          <span id="tick-max">–</span>
         </div>
       </div>
       <div class="time-presets" id="time-presets">
-        <button data-preset="all" class="active">All 21 days</button>
-        <button data-preset="last7">Last 7</button>
-        <button data-preset="weekA">Election wk</button>
-        <button data-preset="weekB">Olympics wk</button>
-        <button data-preset="weekC">Science wk</button>
+        <button data-preset="all" class="active" data-i18n="filter.preset.all21">All 21 days</button>
+        <button data-preset="last7"               data-i18n="filter.preset.last7">Last 7</button>
+        <button data-preset="weekA"               data-i18n="filter.preset.weekA">Election wk</button>
+        <button data-preset="weekB"               data-i18n="filter.preset.weekB">Olympics wk</button>
+        <button data-preset="weekC"               data-i18n="filter.preset.weekC">Science wk</button>
       </div>
     </div>
 
     <div class="group">
       <div class="head">
-        <span class="title">Min Articles</span>
+        <span class="title" data-i18n="filter.minArticles">Min Articles</span>
         <span class="v" id="count-readout">0+</span>
       </div>
       <input type="range" id="count-slider" class="count-slider"
              min="0" max="100" value="0" step="1">
       <div class="head" style="margin-top:14px">
-        <span class="title" style="font-size:8px">Hides reporters below this volume</span>
+        <span class="title" style="font-size:8px" data-i18n="filter.minArticlesHint">Hides reporters below this volume</span>
       </div>
     </div>
 
     <div class="group group-reporters">
       <div class="head">
-        <span class="title">Reporters</span>
+        <span class="title" data-i18n="filter.reporters">Reporters</span>
         <span class="v" id="reporters-readout">all regions</span>
       </div>
       <div class="reporters-tabs">
-        <button class="rep-tab active" data-tab="regions">By Region</button>
-        <button class="rep-tab" data-tab="countries">By Country</button>
+        <button class="rep-tab active" data-tab="regions"   data-i18n="filter.byRegion">By Region</button>
+        <button class="rep-tab"        data-tab="countries" data-i18n="filter.byCountry">By Country</button>
       </div>
       <div class="rep-pane" id="rep-pane-regions">
         <div class="select-all-row">
-          <button class="mini-btn" id="region-select-all">All</button>
-          <button class="mini-btn" id="region-select-none">None</button>
+          <button class="mini-btn" id="region-select-all"  data-i18n="common.all">All</button>
+          <button class="mini-btn" id="region-select-none" data-i18n="common.none">None</button>
         </div>
         <div class="pill-row" id="region-pills"></div>
       </div>
       <div class="rep-pane" id="rep-pane-countries" style="display:none">
         <div class="select-all-row">
           <input type="text" id="country-search" class="country-search"
-                 placeholder="Type to search countries…" />
-          <button class="mini-btn" id="country-clear">Clear</button>
+                 placeholder="Type to search countries…"
+                 data-i18n-attr="placeholder:filter.searchPlaceholder" />
+          <button class="mini-btn" id="country-clear" data-i18n="common.clear">Clear</button>
         </div>
         <div class="country-chips" id="country-chips"></div>
         <div class="country-suggestions" id="country-suggestions"></div>
@@ -1227,19 +1240,20 @@
 
     <div class="group">
       <div class="head">
-        <span class="title">Tone</span>
+        <span class="title" data-i18n="filter.tone">Tone</span>
         <span class="v" id="tone-readout">all</span>
       </div>
       <div class="pill-row" id="tone-pills">
-        <button class="tone-neg on" data-tone="neg">Negative</button>
-        <button class="tone-zero on" data-tone="zero">Neutral</button>
-        <button class="tone-pos on" data-tone="pos">Positive</button>
+        <button class="tone-neg  on" data-tone="neg"  data-i18n="tone.negative">Negative</button>
+        <button class="tone-zero on" data-tone="zero" data-i18n="tone.neutral">Neutral</button>
+        <button class="tone-pos  on" data-tone="pos"  data-i18n="tone.positive">Positive</button>
       </div>
     </div>
 
   </div>
 </div>
 <!-- DATA INJECTION POINT -->
+<script src="i18n.js"></script>
 <script type="importmap">
 {
   "imports": {

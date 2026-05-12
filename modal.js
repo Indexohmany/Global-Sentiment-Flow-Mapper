@@ -1,15 +1,15 @@
 // modal.js
 //
-// Country detail modal — opens on map click, shows a 4-stat header, three
+// Country detail modal: opens on map click, shows a 4-stat header, three
 // SVG charts (tone distribution, daily volume, top targets), and the top
 // tonal articles list. Reads from data + palette + the live filterState
 // (passed in via initCountryModal). Doesn't write to filterState.
 //
 // Public surface:
-//   initCountryModal(filterState)  — wires up close/Escape handlers, must
+//   initCountryModal(filterState): wires up close/Escape handlers, must
 //                                    be called once at startup
-//   openCountryModal(fips)         — open the modal for a country
-//   closeCountryModal()            — close it
+//   openCountryModal(fips): open the modal for a country
+//   closeCountryModal(): close it
 import { COUNTRIES, ROWS, ARTICLE_INDEX, DATES, DATE_INDEX } from './data.js';
 import { toneTagOf } from './palette.js';
 
@@ -36,7 +36,7 @@ function fmtToneLabel(v) {
 function buildCountryModalData(fips) {
   const f = _filterState;
   // For the modal we ALWAYS include the clicked country's rows even if its
-  // bloc is filtered out elsewhere — the modal is *about* this country.
+  // bloc is filtered out elsewhere: the modal is *about* this country.
   // We keep the domain + date + tone filters because those reflect a
   // genuine question the user is currently asking.
   const rows = ROWS.filter(r =>
@@ -238,7 +238,7 @@ function renderArticleList(articles) {
   if (articles.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'No high-tone articles in current filter window for this country.';
+    empty.textContent = window.t('cm.noArticles');
     list.appendChild(empty);
     return list;
   }
@@ -287,7 +287,7 @@ function renderArticleList(articles) {
     const mentions = document.createElement('div');
     mentions.className = 'mentions';
     const codes = (a.mentioned || []).slice(0, 4).join(' ');
-    mentions.innerHTML = `<span class="lbl">re:</span><span class="codes">${escapeHtml(codes) || '—'}</span>`;
+    mentions.innerHTML = `<span class="lbl">re:</span><span class="codes">${escapeHtml(codes) || ', '}</span>`;
     row.appendChild(mentions);
 
     list.appendChild(row);
@@ -308,7 +308,7 @@ export function openCountryModal(fips) {
 
   document.getElementById('cm-name').textContent = c.name;
   document.getElementById('cm-fips').textContent = fips;
-  document.getElementById('cm-bloc').textContent = c.bloc.replace(/_/g, ' ');
+  document.getElementById('cm-bloc').textContent = window.t('bloc.' + c.bloc);
   document.getElementById('cm-articles').textContent = data.articles.toLocaleString();
   const toneEl = document.getElementById('cm-tone');
   if (data.articles > 0) {
@@ -316,7 +316,7 @@ export function openCountryModal(fips) {
     toneEl.textContent = tlbl.txt;
     toneEl.className = 'v ' + tlbl.cls;
   } else {
-    toneEl.textContent = '—';
+    toneEl.textContent = ', ';
     toneEl.className = 'v';
   }
   document.getElementById('cm-pairs').textContent = data.pairs;
@@ -326,25 +326,25 @@ export function openCountryModal(fips) {
   if (data.articles === 0 && data.topArts.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'No coverage from this country under current filters.';
+    empty.textContent = window.t('cm.noArticles');
     cmCharts.appendChild(empty);
   } else {
     if (data.articles > 0) {
       const sec1 = document.createElement('div');
       sec1.className = 'chart-section';
-      sec1.innerHTML = '<div class="title">Tone Distribution</div>';
+      sec1.innerHTML = `<div class="title">${window.t('cm.toneDist')}</div>`;
       sec1.appendChild(renderToneChart(data.toneBuckets));
       cmCharts.appendChild(sec1);
 
       const sec2 = document.createElement('div');
       sec2.className = 'chart-section';
-      sec2.innerHTML = '<div class="title">Daily Article Volume</div>';
+      sec2.innerHTML = `<div class="title">${window.t('cm.dailyVolume')}</div>`;
       sec2.appendChild(renderTimelineChart(data.byDate));
       cmCharts.appendChild(sec2);
 
       const sec3 = document.createElement('div');
       sec3.className = 'chart-section';
-      sec3.innerHTML = '<div class="title">Top Mentioned Countries</div>';
+      sec3.innerHTML = `<div class="title">${window.t('cm.topTargets')}</div>`;
       sec3.appendChild(renderTargetsChart(data.byMentioned));
       cmCharts.appendChild(sec3);
     }
@@ -352,7 +352,7 @@ export function openCountryModal(fips) {
     // Articles section
     const sec4 = document.createElement('div');
     sec4.className = 'chart-section';
-    sec4.innerHTML = '<div class="title">Top Tonal Articles · Driving Sentiment Shift</div>';
+    sec4.innerHTML = `<div class="title">${window.t('cm.topArticles')}</div>`;
     sec4.appendChild(renderArticleList(data.topArts));
     cmCharts.appendChild(sec4);
   }
@@ -360,12 +360,11 @@ export function openCountryModal(fips) {
   // Filter context
   const fs = _filterState;
   const ctx = [];
-  ctx.push(`Domain: ${fs.domain}`);
+  ctx.push(`${window.t('filter.filters')}: ${window.t('domain.' + fs.domain)}`);
   const days = fs.dateMax - fs.dateMin + 1;
-  ctx.push(days === DATES.length ? 'all 21 days'
+  ctx.push(days === DATES.length ? window.t('readout.timePresetAll')
            : `${DATES[fs.dateMin]} → ${DATES[fs.dateMax]}`);
-  if (fs.toneTags.size < 3) ctx.push(`tone: ${[...fs.toneTags].join(', ')}`);
-  ctx.push('region/min-count filters: not applied to this country view');
+  if (fs.toneTags.size < 3) ctx.push(`${window.t('filter.tone')}: ${[...fs.toneTags].join(', ')}`);
   document.getElementById('cm-filters').textContent = ctx.join(' · ');
 
   cmEl.classList.add('open');

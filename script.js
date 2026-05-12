@@ -27,7 +27,7 @@ let elevationBtn = null;  // assigned at element-init time
 
 // PASS-16: Compare-feature state.
 //   - on:        true while the Compare toggle is engaged
-//   - refFips:   country chosen as the reference (Mode II only — UP/DOWN
+//   - refFips:   country chosen as the reference (Mode II only: UP/DOWN
 //                uses the per-pane focals as implicit references)
 // updownPaneEdges{Up,Down} cache directed delta_tone + counts from the
 // focal toward each non-focal country in that pane, populated by
@@ -50,7 +50,7 @@ const compareLineLabel = {
 // Compare module) keeps the hover handler's hideLineLabel() call TDZ-safe.
 const lineLabelEl = document.getElementById('line-label');
 
-// Data is split across files inside ./data/ — see data.js for the layout.
+// Data is split across files inside ./data/: see data.js for the layout.
 // data.js owns the top-level await; importing the resolved values is
 // synchronous from this module's perspective.
 import {
@@ -60,14 +60,14 @@ import { toneColor, toneTagOf } from './palette.js';
 import { initCountryModal, openCountryModal } from './modal.js';
 
 // ---------------------------------------------------------------------------
-// Projection — equirectangular flat plane
+// Projection: equirectangular flat plane
 // X = lon * COORD_SCALE
 // Z = -lat * COORD_SCALE   (so north points toward -Z, default camera view)
 // Y = elevation
 // ---------------------------------------------------------------------------
 const COORD_SCALE = 1.5;
 // PASS-15: MAP_W and MAP_D are dynamic. Geo and Reorganized modes use
-// the BASE values (540 × 270 — standard 2:1 world canvas) for Geographic.
+// the BASE values (540 × 270: standard 2:1 world canvas) for Geographic.
 // Reorganized gets its own slightly wider/taller canvas so force-sim
 // spread doesn't push countries off the basemap. UP/DOWN gets the widest
 // canvas of all: its strong-negative distance ring (BASELINE × 8.5 ≈ 595
@@ -91,7 +91,7 @@ function projLat(lat) { return -lat * COORD_SCALE; }
 // (DATES, DATE_INDEX, ROWS, COUNTRIES, ARTICLE_INDEX all live in data.js
 // now and are imported above. Aggregator code below uses them directly.)
 
-// (toneTagOf, TONE_STOPS, toneColor moved to palette.js — imported above.)
+// (toneTagOf, TONE_STOPS, toneColor moved to palette.js: imported above.)
 
 function aggregateForFilters({ domain, dateMin, dateMax, blocs, countries, toneTags, minCount }) {
   // Filter rows by domain + date window + reporter (country override beats bloc) + tone bucket
@@ -156,7 +156,7 @@ function aggregateForFilters({ domain, dateMin, dateMax, blocs, countries, toneT
 }
 
 // ---------------------------------------------------------------------------
-// (TONE_STOPS + toneColor moved to palette.js — imported above.)
+// (TONE_STOPS + toneColor moved to palette.js: imported above.)
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -173,7 +173,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(36,
   window.innerWidth / window.innerHeight, 0.1, 3000);
 
-// Lighting — strong key + fill + soft ambient. Heightfields love directional.
+// Lighting: strong key + fill + soft ambient. Heightfields love directional.
 const keyLight = new THREE.DirectionalLight(0xffeec0, 1.7);
 keyLight.position.set(220, 380, 240);
 scene.add(keyLight);
@@ -186,7 +186,7 @@ scene.add(rimLight);
 scene.add(new THREE.AmbientLight(0x3a4258, 1.4));
 
 // ---------------------------------------------------------------------------
-// Basemap — bright atlas-style continents
+// Basemap: bright atlas-style continents
 // In Reorganized mode, COUNTRY_OFFSETS hold per-country (ox, oz) translations
 // in world units. In Geographic mode, offsets are all zero and the output is
 // the standard equirectangular world map.
@@ -268,7 +268,7 @@ function makeBasemapTexture() {
       if (off && !off.hidden) drawCountry(COUNTRIES[updownBottomFips], off.ox, off.oz);
     }
 
-    // Divider band between panes — a clear visual gap, not just a hairline.
+    // Divider band between panes: a clear visual gap, not just a hairline.
     // Filled with the deepest background tone so the two panes read as
     // separate viewports, with subtle accent rules at top and bottom.
     // PASS-15: countries are already kept clear of this band by the
@@ -330,7 +330,7 @@ basemap.rotation.x = -Math.PI / 2;
 basemap.position.y = -0.05;
 scene.add(basemap);
 
-// Frame — kept in a tracked variable so setMapDimensions() can rebuild it
+// Frame: kept in a tracked variable so setMapDimensions() can rebuild it
 // when the world's vertical extent changes for UP/DOWN mode.
 function makeFrameGeometry() {
   return new THREE.BufferGeometry().setFromPoints([
@@ -461,7 +461,7 @@ for (const fips in COUNTRIES) {
 console.log(`Built SDF data for ${SHAPES.length} shapes (${Object.keys(COUNTRIES).length} countries)`);
 
 // Smooth multi-octave value noise sampled at world coordinates.
-// Used for *interior* topographic variation — replaces the per-vertex
+// Used for *interior* topographic variation: replaces the per-vertex
 // hash noise that crackled when the camera moved.
 const NOISE_GRID = 64;          // 64x64 base grid (~5.6° per cell)
 const NOISE_SCALE = 360 / NOISE_GRID;
@@ -547,7 +547,7 @@ function countryAtLonLat(lon, lat) {
 }
 
 // ---------------------------------------------------------------------------
-// Heightfield mesh — single subdivided plane covering the world
+// Heightfield mesh: single subdivided plane covering the world
 // Resolution: 1.5° per vertex (240 cols x 120 rows = ~28K vertices)
 // ---------------------------------------------------------------------------
 // Resolution: 1.5° per vertex (240 cols x 120 rows = ~28K vertices)
@@ -586,13 +586,13 @@ for (let i = 0; i < HF_VERTS; i++) {
   colors[i * 3 + 0] = 0.45;
   colors[i * 3 + 1] = 0.48;
   colors[i * 3 + 2] = 0.55;
-  alphas[i] = 0;  // start invisible — basemap shows through
+  alphas[i] = 0;  // start invisible: basemap shows through
 }
 hfGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 hfGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 hfGeom.setAttribute('vAlpha', new THREE.BufferAttribute(alphas, 1));
 
-// Build the index buffer — two triangles per quad
+// Build the index buffer: two triangles per quad
 const indices = [];
 for (let r = 0; r < HF_ROWS - 1; r++) {
   for (let c = 0; c < HF_COLS - 1; c++) {
@@ -609,9 +609,9 @@ hfGeom.computeVertexNormals();
 
 // MeshStandardMaterial with shader injection: read per-vertex alpha and
 // discard fragments below threshold. This makes the heightfield invisible
-// where there's no terrain — the basemap shows through cleanly, no
+// where there's no terrain: the basemap shows through cleanly, no
 // z-fighting because there's nothing rendered at those pixels.
-// Note: not transparent — we use discard, which keeps the material opaque
+// Note: not transparent: we use discard, which keeps the material opaque
 // and avoids the sort-order issues that real transparency would introduce.
 const hfMat = new THREE.MeshStandardMaterial({
   vertexColors: true,
@@ -639,7 +639,7 @@ const positionAttr = hfGeom.attributes.position;
 const colorAttr = hfGeom.attributes.color;
 
 // ---------------------------------------------------------------------------
-// Heightfield update — recomputes per-vertex height, color, and roughness
+// Heightfield update: recomputes per-vertex height, color, and roughness
 // driven by tone, all from the active domain's per-country aggregates.
 // ---------------------------------------------------------------------------
 // Reusable color object to avoid garbage creation in the hot loop
@@ -689,7 +689,7 @@ function applyDomain(domain, perReporter, summary) {
   document.getElementById('s-pairs').textContent = summary.pairs.toLocaleString();
   document.getElementById('s-tone').textContent = summary.meanTone.toFixed(2);
 
-  // Build active shapes list — only those whose country has data this domain.
+  // Build active shapes list: only those whose country has data this domain.
   // Each entry caches its weight (height contribution at full intensity) and tone.
   const activeShapes = [];
   for (const sh of SHAPES) {
@@ -762,7 +762,7 @@ function applyDomain(domain, perReporter, summary) {
     const wsum = weightAcc[i];
 
     if (h < VISIBLE_THRESHOLD) {
-      // No terrain here — invisible, basemap shows through.
+      // No terrain here: invisible, basemap shows through.
       pos[i * 3 + 1] = 0;
       alpha[i] = 0;
       // Color doesn't matter (fragment is discarded), but we set it anyway
@@ -822,7 +822,7 @@ colorsTarget.set(colorAttr.array);
 // positionsCurrent which may be stale), then bake target, then keep live as
 // the new "current."
 function applyFiltersWithTween(filters) {
-  // Snapshot the live buffer as our new "current" — this is whatever the
+  // Snapshot the live buffer as our new "current": this is whatever the
   // user is currently SEEING, regardless of mid-tween state.
   positionsCurrent.set(positionAttr.array);
   colorsCurrent.set(colorAttr.array);
@@ -900,25 +900,25 @@ function updateTooltip(fips, screenX, screenY) {
   ensureTooltipMode('normal');
   const data = lastDomainAgg ? lastDomainAgg.get(fips) : null;
   document.getElementById('tt-name').textContent = `${c.name} · ${fips}`;
-  document.getElementById('tt-out').textContent = data ? data.count.toLocaleString() : '—';
+  document.getElementById('tt-out').textContent = data ? data.count.toLocaleString() : ', ';
   const toneEl = document.getElementById('tt-tone');
   if (data) {
     toneEl.textContent = data.avgTone.toFixed(2);
     toneEl.classList.toggle('neg', data.avgTone < -0.5);
     toneEl.classList.toggle('pos', data.avgTone > 0.5);
   } else {
-    toneEl.textContent = '—';
+    toneEl.textContent = ', ';
     toneEl.classList.remove('neg', 'pos');
   }
   document.getElementById('tt-targets').textContent =
-    data ? (data.topTargets.join(' ') || '—') : '—';
-  document.getElementById('tt-bloc').textContent = c.bloc.replace(/_/g, ' ');
+    data ? (data.topTargets.join(' ') || ', ') : ', ';
+  document.getElementById('tt-bloc').textContent = window.t('bloc.' + c.bloc);
   tooltipEl.style.left = screenX + 'px';
   tooltipEl.style.top = screenY + 'px';
   tooltipEl.classList.add('visible');
 }
 
-// PASS-16: comparison tooltip — shows pairwise affinity to the reference
+// PASS-16: comparison tooltip: shows pairwise affinity to the reference
 // country (Mode II) or to the pane's focal (UP/DOWN). Different rows than
 // the normal tooltip, so we swap the body markup once when the mode
 // changes via ensureTooltipMode().
@@ -928,19 +928,19 @@ function ensureTooltipMode(mode) {
   tooltipBodyMode = mode;
   if (mode === 'compare') {
     tooltipEl.innerHTML = `
-      <div class="name" id="tt-name">—</div>
-      <div class="row"><span class="lbl">vs.</span><span class="v" id="tt-vs">—</span></div>
-      <div class="row"><span class="lbl">Affinity</span><span class="v" id="tt-aff">—</span></div>
-      <div class="row"><span class="lbl">Tier</span><span class="v" id="tt-tier">—</span></div>
-      <div class="row"><span class="lbl">Articles</span><span class="v" id="tt-arts">—</span></div>
+      <div class="name" id="tt-name">, </div>
+      <div class="row"><span class="lbl">${window.t('tooltip.vs')}</span><span class="v" id="tt-vs">, </span></div>
+      <div class="row"><span class="lbl">${window.t('tooltip.affinity')}</span><span class="v" id="tt-aff">, </span></div>
+      <div class="row"><span class="lbl">${window.t('tooltip.tier')}</span><span class="v" id="tt-tier">, </span></div>
+      <div class="row"><span class="lbl">${window.t('tooltip.articles')}</span><span class="v" id="tt-arts">, </span></div>
     `;
   } else {
     tooltipEl.innerHTML = `
-      <div class="name" id="tt-name">—</div>
-      <div class="row"><span class="lbl">Articles published</span><span class="v" id="tt-out">—</span></div>
-      <div class="row"><span class="lbl">Mean tone (out)</span><span class="v" id="tt-tone">—</span></div>
-      <div class="row"><span class="lbl">Top targets</span><span class="v" id="tt-targets">—</span></div>
-      <div class="row"><span class="lbl">Bloc</span><span class="v" id="tt-bloc">—</span></div>
+      <div class="name" id="tt-name">, </div>
+      <div class="row"><span class="lbl">${window.t('tooltip.articlesPublished')}</span><span class="v" id="tt-out">, </span></div>
+      <div class="row"><span class="lbl">${window.t('tooltip.meanToneOut')}</span><span class="v" id="tt-tone">, </span></div>
+      <div class="row"><span class="lbl">${window.t('tooltip.topTargets')}</span><span class="v" id="tt-targets">, </span></div>
+      <div class="row"><span class="lbl">${window.t('tooltip.bloc')}</span><span class="v" id="tt-bloc">, </span></div>
     `;
   }
 }
@@ -955,7 +955,7 @@ function updateTooltipCompare(fips, refFips, paneId, screenX, screenY) {
   ensureTooltipMode('compare');
 
   // Resolve the affinity from cached edge data (no re-aggregation per hover)
-  let sym = null, articlesText = '— (no mutual data)';
+  let sym = null, articlesText = '– (no mutual data)';
   const isDirected = currentMode === 'updown';
   if (currentMode === 'reorganized') {
     const edge = findReorgEdge(refFips, fips);
@@ -972,7 +972,7 @@ function updateTooltipCompare(fips, refFips, paneId, screenX, screenY) {
     }
   }
 
-  let symText = '—', symClass = '', tier = '—';
+  let symText = ', ', symClass = '', tier = ', ';
   if (sym !== null) {
     symText = (sym >= 0 ? '+' : '') + sym.toFixed(2);
     if (sym < -0.5) symClass = 'v neg';
@@ -984,7 +984,7 @@ function updateTooltipCompare(fips, refFips, paneId, screenX, screenY) {
   document.getElementById('tt-name').textContent = `${c.name} · ${fips}`;
   document.getElementById('tt-vs').textContent = ref.name;
   const affEl = document.getElementById('tt-aff');
-  affEl.textContent = symText + (isDirected ? ' (directed)' : ' (mutual)');
+  affEl.textContent = symText + ' ' + window.t(isDirected ? 'tooltip.directed' : 'tooltip.mutual');
   affEl.className = symClass;
   document.getElementById('tt-tier').textContent = tier;
   document.getElementById('tt-arts').textContent = articlesText;
@@ -1140,12 +1140,12 @@ let wasMovingLastFrame = false;
 function tick() {
   const moving = stepTween();
   if (moving) {
-    // Recompute normals at most every 3rd frame during tween — visible quality
+    // Recompute normals at most every 3rd frame during tween: visible quality
     // is fine, CPU cost drops by 2/3 on a 28K-vertex mesh.
     normalRecomputeSkip = (normalRecomputeSkip + 1) % 3;
     if (normalRecomputeSkip === 0) hfGeom.computeVertexNormals();
   } else if (wasMovingLastFrame) {
-    // Just settled — recompute one final time so static state has correct shading
+    // Just settled: recompute one final time so static state has correct shading
     hfGeom.computeVertexNormals();
   }
   wasMovingLastFrame = moving;
@@ -1162,9 +1162,9 @@ function tick() {
 tick();
 
 // ===========================================================================
-// MODE II — Reorganization (Affinity / Antagonism)
+// MODE II: Reorganization (Affinity / Antagonism)
 //
-// Same map, same countries, same mountains — but each country's polygon is
+// Same map, same countries, same mountains: but each country's polygon is
 // translated to a new (x,z) position determined by news affinity:
 //   - countries that mutually report positively about each other → close
 //   - countries that mutually report negatively about each other → far apart
@@ -1187,10 +1187,10 @@ for (const fips in COUNTRIES) {
   COUNTRY_OFFSETS_DOWN.set(fips, { ox: 0, oz: 0, hidden: false });
 }
 
-// (modeTransition is also hoisted to the top — see Mode II forward-declarations.)
+// (modeTransition is also hoisted to the top: see Mode II forward-declarations.)
 
 // =========================================================================
-// Affinity force simulation — computes target offsets for each country
+// Affinity force simulation: computes target offsets for each country
 // =========================================================================
 
 function computeReorganizedOffsets() {
@@ -1228,12 +1228,12 @@ function computeReorganizedOffsets() {
     if (reporterEligible(fips)) nodes.add(fips);
   }
 
-  // Build symmetric edges — keep ALL valid pairs (no percentile filtering).
+  // Build symmetric edges: keep ALL valid pairs (no percentile filtering).
   // Under the new force model, every pair has a target distance:
   //   - Pairs with data → target = function of mutual delta_tone
   //   - Pairs without data → target = BASELINE (default spacing)
   // Near-zero deltas naturally produce near-baseline targets, so they don't
-  // need to be dropped — they just sit at neutral distance.
+  // need to be dropped: they just sit at neutral distance.
   const edges = [];
   for (const [k, p] of directed) {
     const [a, b] = k.split('>');
@@ -1272,7 +1272,7 @@ function computeReorganizedOffsets() {
   const vz = new Float32Array(N);
 
   // Initialize at geographic positions, plus precompute effective country
-  // "radius" in world units — derived from each country's polygon bbox so
+  // "radius" in world units: derived from each country's polygon bbox so
   // that big countries (Russia, Canada) repel proportionally more space.
   const effRadius = new Float32Array(N);
   for (let i = 0; i < N; i++) {
@@ -1316,7 +1316,7 @@ function computeReorganizedOffsets() {
   // === Pair distance map ===
   // For every (A, B) pair, compute a TARGET DISTANCE in world units. The
   // simulation then has a single spring per pair driving the actual distance
-  // toward target. No separate Coulomb repulsion — the baseline distance for
+  // toward target. No separate Coulomb repulsion: the baseline distance for
   // pairs without data IS the repulsion.
   //
   // Distance-from-tone schedule (in world units, additive on top of effective radii):
@@ -1346,10 +1346,10 @@ function computeReorganizedOffsets() {
       pairTarget[i * N + j] = baseTarget;
     }
   }
-  // Apply known-tone targets — overrides baseline for pairs we have data for.
+  // Apply known-tone targets: overrides baseline for pairs we have data for.
   // We also need the per-pair spring weight (stronger for higher-volume pairs).
   const pairWeight = new Float32Array(N * N);
-  // Default weight for baseline pairs — small but nonzero so they're enforced gently.
+  // Default weight for baseline pairs: small but nonzero so they're enforced gently.
   for (let i = 0; i < N * N; i++) pairWeight[i] = 0.4;
   for (const e of edges) {
     const i = idx.get(e.a), j = idx.get(e.b);
@@ -1370,7 +1370,7 @@ function computeReorganizedOffsets() {
   // with a target distance of 100 ends up preferring to satisfy that distance
   // along X rather than Z. This biases the entire layout toward horizontal
   // elongation (matching the canvas aspect ratio) while preserving the
-  // ordering of pair distances — pairs that are "closer" or "farther" by tone
+  // ordering of pair distances: pairs that are "closer" or "farther" by tone
   // remain in the same relative ordering.
   const Z_BIAS = 0.45;
 
@@ -1407,7 +1407,7 @@ function computeReorganizedOffsets() {
     // Center pull + integrate.
     // Anisotropic damping & center pull: vertical (Z) gets stronger center pull
     // and slightly heavier damping than horizontal (X). This is a gentle
-    // horizontal bias — it doesn't change spring rest lengths (so pair
+    // horizontal bias: it doesn't change spring rest lengths (so pair
     // distances are still semantic) but the simulation prefers settling into
     // a wider equilibrium when one is reachable.
     const DAMP_X = DAMP;
@@ -1429,8 +1429,7 @@ function computeReorganizedOffsets() {
 
   // Post-process step 1: PCA rotation. Find the layout's dominant axis
   // (direction of greatest variance) and rotate the whole layout so that
-  // axis runs horizontally. This preserves every pair distance exactly —
-  // rotation is a rigid transform — while making the natural elongation
+  // axis runs horizontally. This preserves every pair distance exactly: // rotation is a rigid transform, while making the natural elongation
   // of the layout match the canvas's wide aspect ratio. Without this,
   // the layout's longest direction can land at any angle, producing a
   // "tall narrow" appearance even though the canvas is wide.
@@ -1496,7 +1495,7 @@ function computeReorganizedOffsets() {
   // be drawn on the basemap or contribute to the heightfield.
   for (const [fips, off] of COUNTRY_OFFSETS) {
     if (!idx.has(fips)) {
-      // Country was filtered out — hide it
+      // Country was filtered out: hide it
       off.targetOx = 0;
       off.targetOz = 0;
       off.hidden = true;
@@ -1518,7 +1517,7 @@ function computeReorganizedOffsets() {
 let REORG_EDGES = [];
 
 // =========================================================================
-// UP/DOWN computation — single-focal layout per pane
+// UP/DOWN computation: single-focal layout per pane
 // =========================================================================
 // For each pane, the focal country is pinned at the pane's center. Every
 // other country's distance from the focal is determined by the focal's
@@ -1651,7 +1650,7 @@ function computeUpDownOffsets(paneId, focalFips) {
   // we need rows from ALL reporters to compute mutual tone between any
   // two countries in our node set, not just from focal's reporters.
 
-  const allDirected = new Map();  // "A>B" -> {dt, c} — all rows in current filter window
+  const allDirected = new Map();  // "A>B" -> {dt, c}: all rows in current filter window
   for (const r of ROWS) {
     if (r.domain !== f.domain) continue;
     const di = DATE_INDEX.get(r.date);
@@ -1725,7 +1724,7 @@ function computeUpDownOffsets(paneId, focalFips) {
     z[i] = Math.sin(angle) * seedR * 0.55;      // Z-compressed
   }
 
-  // Force parameters — same as Mode II
+  // Force parameters: same as Mode II
   const SPRING_K = 0.018;
   const CENTER_X = 0.0006;
   const CENTER_Z = 0.0006 * 1.8;  // stronger Z center pull (horizontal bias)
@@ -1774,7 +1773,7 @@ function computeUpDownOffsets(paneId, focalFips) {
     }
   }
 
-  // PCA rotation around focal (which is at origin) — focal stays at origin
+  // PCA rotation around focal (which is at origin): focal stays at origin
   {
     let cxx = 0, czz = 0, cxz = 0;
     for (let i = 0; i < N; i++) {
@@ -1797,7 +1796,7 @@ function computeUpDownOffsets(paneId, focalFips) {
 
   // Scale & position. The layout's natural extent depends on the
   // schedule + effRadii; we scale to fit the pane but with a minimum-
-  // scale floor, because polygons themselves do NOT scale — shrinking
+  // scale floor, because polygons themselves do NOT scale: shrinking
   // positions too much pulls polygons into each other.
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (let i = 0; i < N; i++) {
@@ -1824,7 +1823,7 @@ function computeUpDownOffsets(paneId, focalFips) {
   // Cap minimum scale at 0.65: going smaller compresses positions enough
   // to introduce polygon overlap even after the simulation has placed
   // centers correctly. If the layout is too big to fit at 0.65, we accept
-  // overflow past the pane bounds — the user's intent is NEVER OVERLAP,
+  // overflow past the pane bounds: the user's intent is NEVER OVERLAP,
   // even at the cost of some countries spilling outside the pane.
   const fitScale = Math.min(TARGET_W / layoutW, TARGET_H / layoutH);
   const scale = Math.max(0.65, Math.min(1.4, fitScale));
@@ -1852,7 +1851,7 @@ function computeUpDownOffsets(paneId, focalFips) {
   // settle into a layout where both hold.
   //
   // The Z-clamp uses halfH[i] (per-axis polygon half-height) so the
-  // POLYGON edge — not just the country's center — stays clear of the
+  // POLYGON edge: not just the country's center, stays clear of the
   // divider and edges. Previous passes only clamped centers, so big
   // polygons could still bleed across the divider into the other pane.
   const REPAIR_BUFFER = 4;        // tiny gap even at sym=+2 ("touching")
@@ -1875,7 +1874,7 @@ function computeUpDownOffsets(paneId, focalFips) {
         const overlap = (minDist - d) + 0.05;
         let ux, uz;
         if (d < 1e-3) {
-          // Coincident — pick a deterministic but i-varied direction
+          // Coincident: pick a deterministic but i-varied direction
           ux = Math.cos((i * 7 + j) * 0.41);
           uz = Math.sin((i * 7 + j) * 0.41);
         } else {
@@ -1911,7 +1910,7 @@ function computeUpDownOffsets(paneId, focalFips) {
         zMax =  MAP_D/4 - EDGE_BUFFER - halfH[i];
       }
       if (zMin > zMax) {
-        // Country too tall to fit cleanly — center it in the pane and
+        // Country too tall to fit cleanly: center it in the pane and
         // accept that it slightly nicks an edge. Rare in practice.
         const target = (zMin + zMax) / 2;
         if (Math.abs(z[i] - target) > 0.05) { z[i] = target; moved = true; }
@@ -1965,7 +1964,7 @@ function computeUpDownOffsets(paneId, focalFips) {
 }
 
 // =========================================================================
-// Geometry rebuild — applies current offsets to polygons & heightfield
+// Geometry rebuild: applies current offsets to polygons & heightfield
 // =========================================================================
 
 // Rebuild SHAPES (resampled boundaries + bboxes) using current offsets.
@@ -2056,11 +2055,11 @@ function rebuildBasemapTexture() {
 }
 
 // =========================================================================
-// Mode tween — runs each frame while modeTransition.active
+// Mode tween: runs each frame while modeTransition.active
 // =========================================================================
 
 // =========================================================================
-// Mode tween — simplified to a snap, with the heightfield itself tweening
+// Mode tween: simplified to a snap, with the heightfield itself tweening
 // via the existing applyFiltersWithTween path. Rebuilding SHAPES + basemap +
 // bboxes per-frame is too expensive (~150ms each), so we accept the visual
 // abruptness on the basemap and let only the mountains tween.
@@ -2177,10 +2176,10 @@ function countryAtWorldXZ(wx, wz) {
 }
 
 // =========================================================================
-// PASS-16 — Compare feature
+// PASS-16: Compare feature
 //
 // When the user toggles Compare ON, the click-to-open-modal interaction is
-// replaced by click-to-set-reference (Mode II only — UP/DOWN uses the
+// replaced by click-to-set-reference (Mode II only: UP/DOWN uses the
 // per-pane focals as implicit references). With a reference active:
 //   - faint lines fan out from the reference to every other country in
 //     view, color-coded by tone (red=hostile, teal=friendly, dim=neutral)
@@ -2190,7 +2189,7 @@ function countryAtWorldXZ(wx, wz) {
 //
 // All compare visuals are children of compareGroup so they can be cleared
 // in one call. Lines use a single LineSegments mesh with vertex colors
-// (low-signal pairs get dimmer color baked in — there's no per-line alpha
+// (low-signal pairs get dimmer color baked in: there's no per-line alpha
 // in plain WebGL line materials, so we encode confidence in the color
 // itself rather than fighting transparency).
 // =========================================================================
@@ -2198,14 +2197,14 @@ function countryAtWorldXZ(wx, wz) {
 const compareGroup = new THREE.Group();
 scene.add(compareGroup);
 
-// Schedule tier label — buckets the symmetric/directed delta_tone into
+// Schedule tier label: buckets the symmetric/directed delta_tone into
 // the same five categories the layout's distance schedule uses.
 function compareTierLabel(sym) {
-  if (sym >=  1.5) return 'extreme positive';
-  if (sym >=  0.5) return 'close';
-  if (sym >  -0.5) return 'baseline';
-  if (sym >  -1.5) return 'far';
-  return 'very far';
+  if (sym >=  1.5) return window.t('tier.extremePositive');
+  if (sym >=  0.5) return window.t('tier.close');
+  if (sym >  -0.5) return window.t('tier.baseline');
+  if (sym >  -1.5) return window.t('tier.far');
+  return window.t('tier.veryFar');
 }
 
 // Look up the symmetric Mode-II edge for a pair of countries. REORG_EDGES
@@ -2223,7 +2222,7 @@ function findReorgEdge(fipsA, fipsB) {
 
 // World-space position of a country's centroid in the current mode.
 // In UP/DOWN this depends on which pane the country is in (a country
-// covered in both panes appears twice — caller passes paneId to disambiguate).
+// covered in both panes appears twice: caller passes paneId to disambiguate).
 function countryWorldPos(fips, paneId = null) {
   const c = COUNTRIES[fips];
   if (!c) return null;
@@ -2396,7 +2395,7 @@ function clearCompareReference() {
 // label feel attached to the line, which is what makes it read as "the
 // number FOR THIS line" rather than "a tooltip near the cursor".
 // (lineLabelEl and compareLineLabel are hoisted to the top of the module
-// — onMouseMove can fire before this section in the file is reached.)
+//: onMouseMove can fire before this section in the file is reached.)
 function showLineLabel(refPos, tgtPos, sym) {
   // Anchor at the midpoint of the line, slightly elevated so it visually
   // floats above the line itself.
@@ -2425,7 +2424,7 @@ function updateLineLabelPosition() {
   if (!compareLineLabel.active) return;
   const v = compareLineLabel.midpoint.clone().project(camera);
   if (v.z >= 1) {
-    // Behind the camera — hide rather than render in a wrong spot
+    // Behind the camera: hide rather than render in a wrong spot
     lineLabelEl.classList.remove('visible');
     return;
   }
@@ -2448,7 +2447,7 @@ function updateCompareButtonState() {
   const allowed = currentMode === 'reorganized' || currentMode === 'updown';
   btn.disabled = !allowed;
   btn.classList.toggle('active', compareState.on && allowed);
-  btn.textContent = 'Compare: ' + (compareState.on && allowed ? 'On' : 'Off');
+  btn.textContent = window.t('compare.label') + ': ' + window.t(compareState.on && allowed ? 'common.on' : 'common.off');
 }
 
 // =========================================================================
@@ -2525,11 +2524,11 @@ function setMode(targetMode) {
     if (targetMode === 'updown') {
       const aName = COUNTRIES[updownTopFips]?.name ?? updownTopFips;
       const bName = COUNTRIES[updownBottomFips]?.name ?? updownBottomFips;
-      indicator.textContent = `Mode III · UP/DOWN: ${aName} vs ${bName}`;
+      indicator.textContent = window.t('mode.updown.indicator', { a: aName, b: bName });
     } else if (targetMode === 'reorganized') {
-      indicator.textContent = 'Mode II · Reorganized by Affinity';
+      indicator.textContent = window.t('mode.reorganized.indicator');
     } else {
-      indicator.textContent = 'Mode I · Geographic';
+      indicator.textContent = window.t('mode.geo.indicator');
     }
   }
 }
@@ -2655,7 +2654,7 @@ function onFilterChange() {
     modeTransition.startTime = performance.now();
     return;
     // Note: applyFiltersWithTween fires automatically at transition-end via
-    // stepReorganization() — so heightfield reflects both new offsets AND new filter.
+    // stepReorganization(): so heightfield reflects both new offsets AND new filter.
   }
   // In UP/DOWN mode, filter changes recompute both panes from scratch.
   if (currentMode === 'updown') {
@@ -2687,7 +2686,7 @@ document.getElementById('filterbar-handle').addEventListener('click', () => {
   document.body.classList.toggle('filterbar-open', filterbarEl.classList.contains('open'));
 });
 
-// Time slider — dual-thumb (two range inputs stacked, with a fill div)
+// Time slider: dual-thumb (two range inputs stacked, with a fill div)
 const timeMinEl = document.getElementById('time-min');
 const timeMaxEl = document.getElementById('time-max');
 const timeFillEl = document.getElementById('time-fill');
@@ -2723,7 +2722,7 @@ function adjustSliderZ() {
 
 function fmtDate(dateStr) {
   // YYYY-MM-DD -> MMM DD
-  if (!dateStr) return '—';
+  if (!dateStr) return ', ';
   const [, mm, dd] = dateStr.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${months[+mm - 1]} ${+dd}`;
@@ -2738,7 +2737,13 @@ function updateTimeUI() {
   timeFillEl.style.left = minPct + '%';
   timeFillEl.style.width = (maxPct - minPct) + '%';
   const days = dMax - dMin + 1;
-  timeReadoutEl.textContent = `${days} day${days === 1 ? '' : 's'} · ${fmtDate(DATES[dMin])} → ${fmtDate(DATES[dMax])}`;
+  if (days === 1) {
+    timeReadoutEl.textContent = window.t('readout.timeWindowSingular', { start: fmtDate(DATES[dMin]) });
+  } else {
+    timeReadoutEl.textContent = window.t('readout.timeWindow', {
+      days, start: fmtDate(DATES[dMin]), end: fmtDate(DATES[dMax])
+    });
+  }
   tickMinEl.textContent = fmtDate(DATES[dMin]);
   tickMaxEl.textContent = fmtDate(DATES[dMax]);
   // Mark which preset (if any) currently matches this exact range
@@ -2786,7 +2791,7 @@ const countSliderEl = document.getElementById('count-slider');
 const countReadoutEl = document.getElementById('count-readout');
 countSliderEl.addEventListener('input', () => {
   filterState.minCount = parseInt(countSliderEl.value, 10);
-  countReadoutEl.textContent = filterState.minCount + '+';
+  countReadoutEl.textContent = filterState.minCount + window.t('readout.minCountSuffix');
   updateFilterSummary();
   scheduleRefresh();
 });
@@ -2799,10 +2804,10 @@ const reportersReadoutEl = document.getElementById('reporters-readout');
 const regionPillsEl = document.getElementById('region-pills');
 
 function blocLabel(b) {
-  return b.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return window.t('bloc.' + b);
 }
 
-// Region pills — built dynamically from ALL_BLOCS
+// Region pills: built dynamically from ALL_BLOCS
 for (const b of ALL_BLOCS) {
   const btn = document.createElement('button');
   btn.dataset.bloc = b;
@@ -2813,11 +2818,16 @@ for (const b of ALL_BLOCS) {
 
 function updateReportersReadout() {
   if (filterState.countries.size > 0) {
-    reportersReadoutEl.textContent = `${filterState.countries.size} countr${filterState.countries.size === 1 ? 'y' : 'ies'}`;
+    const n = filterState.countries.size;
+    reportersReadoutEl.textContent = n === 1
+      ? window.t('readout.countryCountOne')
+      : window.t('readout.countryCount', { n });
   } else if (filterState.blocs.size === ALL_BLOCS.length) {
-    reportersReadoutEl.textContent = 'all regions';
+    reportersReadoutEl.textContent = window.t('readout.allRegions');
   } else {
-    reportersReadoutEl.textContent = `${filterState.blocs.size}/${ALL_BLOCS.length} regions`;
+    reportersReadoutEl.textContent = window.t('readout.regionsCount', {
+      n: filterState.blocs.size, total: ALL_BLOCS.length
+    });
   }
 }
 
@@ -2851,7 +2861,7 @@ document.getElementById('region-select-all').addEventListener('click', () => {
   scheduleRefresh();
 });
 document.getElementById('region-select-none').addEventListener('click', () => {
-  // Pick the first bloc only — guaranteed non-empty (avoids empty filter)
+  // Pick the first bloc only: guaranteed non-empty (avoids empty filter)
   const keep = ALL_BLOCS[0];
   filterState.blocs = new Set([keep]);
   for (const btn of regionPillsEl.querySelectorAll('button')) {
@@ -2881,7 +2891,7 @@ const countrySuggestionsEl = document.getElementById('country-suggestions');
 const countryClearEl = document.getElementById('country-clear');
 
 // Pre-build a sortable country list for search (only countries appearing as
-// reporters — others wouldn't contribute anything if selected).
+// reporters: others wouldn't contribute anything if selected).
 const REPORTER_FIPS_SET = new Set();
 for (const r of ROWS) REPORTER_FIPS_SET.add(r.reporter);
 const COUNTRY_INDEX = [...REPORTER_FIPS_SET]
@@ -2993,7 +3003,7 @@ tonePillsEl.addEventListener('click', e => {
     btn.classList.remove('off');
   }
   const n = filterState.toneTags.size;
-  toneReadoutEl.textContent = n === 3 ? 'all' : `${n}/3`;
+  toneReadoutEl.textContent = n === 3 ? window.t('readout.toneAll') : window.t('readout.toneCount', { n });
   updateFilterSummary();
   scheduleRefresh();
 });
@@ -3002,19 +3012,23 @@ tonePillsEl.addEventListener('click', e => {
 function updateFilterSummary() {
   const parts = [];
   const days = filterState.dateMax - filterState.dateMin + 1;
-  parts.push(days === DATES.length ? 'All days' : `${days}d`);
+  parts.push(days === DATES.length ? window.t('readout.allDays') : window.t('readout.daysShort', { n: days }));
   if (filterState.countries.size > 0) {
-    parts.push(`${filterState.countries.size} countr${filterState.countries.size === 1 ? 'y' : 'ies'}`);
+    const n = filterState.countries.size;
+    parts.push(n === 1 ? window.t('readout.countryCountOne') : window.t('readout.countryCount', { n }));
   } else {
-    parts.push(filterState.blocs.size === ALL_BLOCS.length ? 'all regions'
-               : `${filterState.blocs.size}/${ALL_BLOCS.length} regions`);
+    parts.push(filterState.blocs.size === ALL_BLOCS.length
+      ? window.t('readout.allRegions')
+      : window.t('readout.regionsCount', { n: filterState.blocs.size, total: ALL_BLOCS.length }));
   }
-  parts.push(filterState.toneTags.size === 3 ? 'all tones' : `${filterState.toneTags.size}/3 tones`);
-  if (filterState.minCount > 0) parts.push(`min ${filterState.minCount}`);
+  parts.push(filterState.toneTags.size === 3
+    ? window.t('readout.allTones')
+    : window.t('readout.tonesCount', { n: filterState.toneTags.size }));
+  if (filterState.minCount > 0) parts.push(window.t('readout.minPrefix', { n: filterState.minCount }));
   document.getElementById('filter-summary').textContent = parts.join(' · ');
 }
 
-// Domain toggle (kept where it was — remains the primary axis)
+// Domain toggle (kept where it was: remains the primary axis)
 document.getElementById('domain-toggle').addEventListener('click', e => {
   const btn = e.target.closest('button');
   if (!btn) return;
@@ -3027,7 +3041,7 @@ document.getElementById('domain-toggle').addEventListener('click', e => {
 });
 
 // Methodology
-// Elevation toggle — hides/shows the heightfield mesh entirely. The basemap
+// Elevation toggle: hides/shows the heightfield mesh entirely. The basemap
 // continues to render so users can study the reorganized layout flat.
 // (elevationOn and elevationBtn are forward-declared at the top of the module.)
 elevationBtn = document.getElementById('elevation-btn');
@@ -3035,7 +3049,7 @@ if (elevationBtn) {
   elevationBtn.addEventListener('click', () => {
     elevationOn = !elevationOn;
     hfMesh.visible = elevationOn;
-    elevationBtn.textContent = 'Elevation: ' + (elevationOn ? 'On' : 'Off');
+    elevationBtn.textContent = window.t('elevation.label') + ': ' + window.t(elevationOn ? 'common.on' : 'common.off');
     elevationBtn.classList.toggle('active', elevationOn);
   });
 }
@@ -3075,7 +3089,7 @@ for (const id of ['stats', 'legend']) {
 }
 
 // ---------------------------------------------------------------------------
-// Country detail modal — moved to modal.js. Click handler below calls into
+// Country detail modal: moved to modal.js. Click handler below calls into
 // it via openCountryModal(); the modal wires its own close + Escape
 // handlers in initCountryModal().
 // ---------------------------------------------------------------------------
@@ -3132,3 +3146,43 @@ updateFilterSummary();
 applyFiltersWithTween(buildFilters());
 
 setTimeout(() => document.getElementById('loader').classList.add('hidden'), 240);
+
+/* ------------------------------------------------------------------ */
+/* Language switching: refresh all JS-dynamic text when language flips */
+/* ------------------------------------------------------------------ */
+window.addEventListener('i18n:change', () => {
+  // Region pills are built dynamically with blocLabel: refresh their text
+  for (const btn of regionPillsEl.children) {
+    btn.textContent = blocLabel(btn.dataset.bloc);
+  }
+  // Country chips and suggestions are also generated; refresh them
+  renderCountryChips();
+  if (countrySearchEl.value) renderCountrySuggestions(countrySearchEl.value);
+
+  // Tooltip body labels are template-built; force a rebuild on next show
+  tooltipBodyMode = null;
+
+  // Buttons whose text combines a label + on/off state
+  elevationBtn.textContent = window.t('elevation.label') + ': ' + window.t(elevationOn ? 'common.on' : 'common.off');
+  updateCompareButtonState();
+
+  // Mode indicator
+  setMode(currentMode);
+
+  // Dynamic readouts in the filter bar
+  updateTimeUI();
+  updateReportersReadout();
+  updateFilterSummary();
+  countReadoutEl.textContent = filterState.minCount + window.t('readout.minCountSuffix');
+  const nTones = filterState.toneTags.size;
+  toneReadoutEl.textContent = nTones === 3 ? window.t('readout.toneAll') : window.t('readout.toneCount', { n: nTones });
+
+  // Window aggregated readout (top-right)
+  const winEl = document.getElementById('meta-window');
+  if (winEl) winEl.textContent = window.t('window.aggregated', { n: DATES.length });
+});
+
+// Apply the initial language to dynamic text now (script.js runs after i18n.js
+// already populated static data-i18n nodes, but the JS-dynamic ones above
+// were rendered with their initial values).
+window.dispatchEvent(new CustomEvent('i18n:change', { detail: { lang: window.currentLang } }));
